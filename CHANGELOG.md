@@ -1,4 +1,4 @@
-# `CHANGE-ME` CHANGELOG
+# `seguro-gateway` CHANGELOG
 
 ## `0.1.0`
 
