@@ -8,7 +8,7 @@
     "main": "./build/index.js",
     "types": "./build/index.d.ts",
     "scripts": {
-        "lint": "",
+        "lint": "jest",
         "test": "jest",
         "build": "tsc --project ./tsconfig.build.json",
         "clean": "rm -rf ./node_modules ./build",
