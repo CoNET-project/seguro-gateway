@@ -43,11 +43,11 @@ const checkStorage = ( ) => {
         data: '',
         err: ''
     }
-    db.get ( 'init' ).then ( doc => {
+    db.get ( 'init' ).then (( doc: Object ) => {
         cmd.data = doc
         console.log (`init doc = [${ doc }]`)
         returnCommand ( cmd )
-    }).catch ( ex => {
+    }).catch ((ex: Error )=> {
         cmd.data = ''
         returnCommand ( cmd )
     })

@@ -58,6 +58,13 @@ interface keyPair {
 	privateKeyArmor: string
 
 }
+interface worker_command {
+	cmd: string
+	data?: any
+	uuid?: string
+	err?: string
+}
 
 declare const openpgp
+declare const PouchDB
 declare const buffer: any
