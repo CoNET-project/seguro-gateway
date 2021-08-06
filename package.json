@@ -22,7 +22,8 @@
         "multer": "^1.4.2",
         "openpgp": "^5.0.0-5",
         "uuid": "^8.3.2",
-        "ws": "^8.0.0"
+        "ws": "^8.0.0",
+        "async": "^3.2.0"
     },
     "devDependencies": {
         "@types/async": "^3.2.7",
