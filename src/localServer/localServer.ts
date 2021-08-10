@@ -375,12 +375,16 @@ class LocalServer {
         })
 
         this.localserver.on ( 'upgrade', ( request, socket, head ) => {
+            // @ts-ignore
             if ( /\/connectToSeguro/.test ( request.url )) {
+                // @ts-ignore
                 return wsServerConnect.handleUpgrade ( request, socket, head, ws => {
                     return wsServerConnect.emit ( 'connection', ws, request )
                 })
             }
+            // @ts-ignore
             if ( /\/peerToPeerConnecting/.test ( request.url )) {
+                // @ts-ignore
                 return wsServerConnect.handleUpgrade ( request, socket, head, ws => {
                     return wsServerConnect.emit ( 'peerToPeerConnecting', ws, request )
                 })
