@@ -1,5 +1,21 @@
 # `seguro-gateway` CHANGELOG
 
+## `0.9.1`
+
+### Additions
+
+- None.
+
+### Changes
+
+- None.
+
+### Fixes
+
+- Fixed iOS Safari Worker issue.
+
+---
+
 ## `0.9.0`
 
 ### Additions
