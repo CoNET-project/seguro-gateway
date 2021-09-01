@@ -7,6 +7,7 @@ import * as fse from 'fs-extra'
 import { imapAccountTest } from './utilities/Imap'
 import { inspect } from 'util'
 import { testImapServer, getInformationFromSeguro, buildConnect } from './utilities/network'
+import type { ClientRequest } from 'http'
 const cors = require('cors')
 
 const getEncryptedMessagePublicKeyID = async ( encryptedMessage: string, CallBack: ( err?: Error|null, data?: string[]) => void ) => {
@@ -77,7 +78,7 @@ class LocalServer {
             return process.exit (1)
         })
 
-        app.get('/hello', (req, res) => {
+        app.get('/hello', (req, res ) => {
             console.log('Hello!')
             res.json('Hello world, from Seguro gateway!')
         })

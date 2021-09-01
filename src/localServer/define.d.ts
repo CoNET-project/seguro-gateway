@@ -1,6 +1,7 @@
 
 declare const openpgp
 declare const buffer: any
+declare const scrypt: any
 
 interface imapConnect {
 	imapServer: string
@@ -57,34 +58,78 @@ interface Window {
 interface keyPair {
 	publicKeyArmor: string
 	privateKeyArmor: string
-
-}
-
-declare type WorkerCommandError = 'NOT_READY'|'INVALID_DATA'|'NO_UUID'|'INVALID_COMMAND'|'OPENPGP_RUNNING_ERROR'|
-'PouchDB_ERROR'
-
-declare type WorkerCommand = 'helloWorld'|'READY'|'storage_StoreContainerData'|'encrypt_InitSeguroData'
-
-interface worker_command {
-	cmd: WorkerCommand
-	data?: any
-	uuid?: string
-	err?: WorkerCommandError
-}
-
-interface initSeguroDataResolve {
-	containerData: ContainerData
-	seguroKeyChain: {
-		deviceKeyPair: keyPair
-		seguroAccountKeyPair: keyPair
-	}
+	keyID?: string
+	keyOpenPGP_obj: {
+		publicKeyObj: any
+		privateKeyObj: any
+	} | null
+	_id?: string
 	
 }
 
 
-interface ContainerData {
-	ContainerKeyPair: keyPair
-	containerDummyPassword?: string
-	_id?:string
-	_rev?: string
+interface passInit {
+	charSet: string
+	salt: Buffer
+	N: number
+	r: number
+	p: number
+	dkLen: number
+	passcode: string
+	_passcode: string
+	password: string
+}
+
+declare type WorkerCommandError = 'NOT_READY'|'INVALID_DATA'|'NO_UUID'|'INVALID_COMMAND'|'OPENPGP_RUNNING_ERROR'|
+'PouchDB_ERROR'|'GENERATE_PASSCODE_ERROR'|'FAILURE'|'COUNTDOWN'
+
+declare type WorkerCommand = 'helloWorld'|'READY'|'storage_StoreContainerData'|'encrypt_InitSeguroData'|
+	'encrypt_TestPasscord'|'encrypt_createPasscode'
+
+interface worker_command {
+	cmd: WorkerCommand
+	data: any[]
+	uuid?: string
+	err?: WorkerCommandError
+}
+
+
+interface profile extends keyPair {
+    nickname?: string
+    keyID?: string
+    tags?: string[]
+	alias?: string
+}
+
+type ColorTheme = 'LIGHT' | 'DARK'
+type Language = 'en-CA ' | 'fr-CA' | 'ja-JP' | 'zh-CN' | 'zh-TW'
+type PasscodeStatus = 'LOCKED' | 'UNLOCKED' | 'UNDEFINED'
+
+interface encrypt_keys_object {
+    containerKeyPair: keyPair
+    keyChain: {
+        deviceKeyPair: keyPair
+        seguroAccountKeyPair: keyPair
+		profiles: profile[]
+    }
+	toStoreObj: any
+	isReady: boolean
+	encryptedString: string
+}
+
+interface Passcord {
+    status: PasscodeStatus
+    testPasscord: null
+    createPasscode: null
+}
+
+interface Preferences {
+    colorTheme: ColorTheme
+    language: Language
+}
+
+interface systemInitialization {
+	preferences: Preferences
+	profiles: profile []
+	passcord: Passcord
 }
