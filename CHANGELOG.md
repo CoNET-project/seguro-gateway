@@ -1,5 +1,24 @@
 # `seguro-gateway` CHANGELOG
 
+
+## `0.10.0`
+
+### Additions
+
+- testPasscord
+
+- createPasscode
+
+- initContainerData
+
+### Changes
+
+- None.
+
+### Fixes
+
+- None.
+
 ## `0.9.1`
 
 ### Additions
