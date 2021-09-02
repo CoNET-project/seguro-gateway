@@ -436,7 +436,7 @@ const encrypt_InitSeguroDataToPGP = ( cmd: worker_command ) => {
             SeguroKeyChain.encryptedString = encryptedText
         }
         
-        return returnSeguroInitializationData (cmd)
+        return storage_StoreContainerData(cmd)
     })
 
 }

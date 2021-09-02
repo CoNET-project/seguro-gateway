@@ -147,7 +147,7 @@ const storeUUIDFragments = ( encrypted: string, CallBack: ( ex: Error|null, data
 const storage_StoreContainerData = (cmd: worker_command) => {
     
     const encryptedText = SeguroKeyChain?.encryptedString ? SeguroKeyChain.encryptedString : ''
-
+    
     logger ('storage_StoreContainerData start!')
     return async.waterfall ([
         (next: any) => storeUUIDFragments ( encryptedText, next ),

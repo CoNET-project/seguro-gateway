@@ -86,13 +86,12 @@ declare type WorkerCommandError = 'NOT_READY'|'INVALID_DATA'|'NO_UUID'|'INVALID_
 declare type WorkerCommand = 'helloWorld'|'READY'|'storage_StoreContainerData'|'encrypt_InitSeguroData'|
 	'encrypt_TestPasscord'|'encrypt_createPasscode'
 
-interface worker_command {
+type worker_command = {
 	cmd: WorkerCommand
 	data: any[]
 	uuid?: string
 	err?: WorkerCommandError
 }
-
 
 interface profile extends keyPair {
     nickname?: string
@@ -105,7 +104,7 @@ type ColorTheme = 'LIGHT' | 'DARK'
 type Language = 'en-CA ' | 'fr-CA' | 'ja-JP' | 'zh-CN' | 'zh-TW'
 type PasscodeStatus = 'LOCKED' | 'UNLOCKED' | 'UNDEFINED'
 
-interface encrypt_keys_object {
+type encrypt_keys_object = {
     containerKeyPair: keyPair
     keyChain: {
         deviceKeyPair: keyPair
@@ -117,7 +116,7 @@ interface encrypt_keys_object {
 	encryptedString: string
 }
 
-interface Passcord {
+type Passcord = {
     status: PasscodeStatus
     testPasscord: null
     createPasscode: null
