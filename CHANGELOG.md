@@ -1,5 +1,19 @@
 # `seguro-gateway` CHANGELOG
 
+## `0.10.1`
+
+### Additions
+
+- 
+
+### Changes
+
+- None.
+
+### Fixes
+
+- Fixed createPasscode have not store data issue.
+
 
 ## `0.10.0`
 
