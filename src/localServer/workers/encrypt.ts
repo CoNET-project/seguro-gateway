@@ -21,17 +21,31 @@ const encryptWorkerDoCommand = ( cmd: worker_command ) => {
             
         }
 
-        case 'storage_StoreContainerData': {
-            if ( !cmd?.data || !cmd.data?.length) {
-                cmd.err = 'INVALID_DATA'
-                return returnCommand (cmd)
-            }
-            systemInitialization = cmd.data[0]
-            return encrypt_InitSeguroDataToPGP (cmd)
-        }
-
         case 'encrypt_TestPasscord': {
             return encrypt_TestPasscord (cmd)
+        }
+
+        case 'encrypt_lock': {
+            if ( SeguroKeyChain ) {
+                SeguroKeyChain.isReady = false
+                SeguroKeyChain.containerKeyPair.keyOpenPGP_obj = SeguroKeyChain.keyChain.deviceKeyPair.keyOpenPGP_obj = 
+                SeguroKeyChain.keyChain.seguroAccountKeyPair.keyOpenPGP_obj = 
+                {
+                    privateKeyObj: null,
+                    publicKeyObj: null
+                }
+            }
+            cmd.data = [{
+                preferences: systemInitialization?.preferences,
+                passcord: {
+                    testPasscord: null,
+                    createPasscode: null,
+                    status: 'LOCKED'
+                },
+                profiles: []
+            }]
+            
+            returnCommand (cmd)
         }
 
         default: {
@@ -42,7 +56,7 @@ const encryptWorkerDoCommand = ( cmd: worker_command ) => {
     }
 }
 
-const initEncrypt = () => {
+const initEncryptWorker = () => {
     const baseUrl = self.name + 'utilities/'
     self.importScripts ( baseUrl + 'Buffer.js' )
     self.importScripts ( baseUrl + 'openpgp.min.js' )
@@ -77,6 +91,7 @@ const initEncrypt = () => {
 let SeguroKeyChain: encrypt_keys_object | null = null
 let systemInitialization: systemInitialization|null = null
 let pass: passInit| null = null
+let systemInitialization_UUID = ''
 
 const initSeguroData = ( cmd: worker_command ) => {
     
@@ -139,13 +154,11 @@ const initSeguroData = ( cmd: worker_command ) => {
             keyOpenPGP_obj: null
         }
         ret.keyChain.profiles.push(_key)
-        
-        return async.waterfall ([
-            ( next: any ) => createEncryptObject (ret, next ),
-            (obj: any, next: any ) => {
-                SeguroKeyChain = obj
-                return initEncryptObject (cmd, next )
-            }
+        SeguroKeyChain = ret
+        return async.series ([
+            ( next: any ) => createEncryptObject (next),
+            (next: any ) => initEncryptObject (cmd, next)
+            
         ], err => {
             if (err) {
                 logger (`initEncryptObject ERROR`, err )
@@ -153,7 +166,7 @@ const initSeguroData = ( cmd: worker_command ) => {
                 return returnCommand (cmd)
             }
 
-            return encrypt_InitSeguroDataToPGP (cmd)
+            return encrypt_Seguro_INIT_data_ToPGP (cmd)
         })
     })
     .catch (( ex: any ) => {
@@ -164,47 +177,26 @@ const initSeguroData = ( cmd: worker_command ) => {
     })
 }
 
-const createEncryptObject = ( obj: encrypt_keys_object, CallBack: ( err: Error|null, obj?: encrypt_keys_object ) => void ) => {
-    if ( !obj ) {
-        return CallBack ( new Error ('createEncryptObject Error! Have no obj') )
-    }
-    return openpgp.readKey ({ armoredKey: obj.keyChain.deviceKeyPair.publicKeyArmor})
-    .then ((n: any) => {
-        obj.keyChain.deviceKeyPair.keyOpenPGP_obj = {
-            privateKeyObj: null,
-            publicKeyObj: n
+const createEncryptObject = ( CallBack: (err: Error|null) => void ) => {
+    
+    return makeDeviceKeyObj (err => {
+        if (err) {
+            return CallBack (err)
         }
-        obj.keyChain.deviceKeyPair.keyID = n.getKeyIDs()[1].toHex ().toUpperCase ()
-        return async.eachSeries ( obj.keyChain.profiles, ( n, next ) => {
-            const obj = n.keyOpenPGP_obj = {
-                privateKeyObj: null,
-                publicKeyObj: null
-            }
-            openpgp.readKey ( { armoredKey: n.publicKeyArmor })
-            .then ((nn:any) => {
-                
-                obj.publicKeyObj = nn
-                
-                n.keyID = nn.getKeyIDs()[1].toHex ().toUpperCase ()
-                return openpgp.readPrivateKey ({ armoredKey: n.privateKeyArmor })
-            }).then ((nn: any ) => {
-                obj.privateKeyObj = nn
-                return next ()
-            }).catch ((ex: Error ) => {
-                return next (ex)
-            })
-        }, err => {
+        if ( !SeguroKeyChain ) {
+            return CallBack ( new Error ('createEncryptObject Error! Have no obj') )
+        }
+        return async.eachSeries ( SeguroKeyChain.keyChain.profiles, ( n, next ) => makeKeypairOBJ(n, '', next), err => {
             if ( err ) {
-                return CallBack ( err )
+                return CallBack (err)
             }
-            return CallBack (null, obj)
+            return CallBack (null)
         })
-    }).catch ((ex: Error ) => {
-        return CallBack ( ex )
     })
+    
 }
 
-const initEncryptObject = (cmd: worker_command, CallBack: (err?: Error) => void ) => {
+const initEncryptObject = (cmd: worker_command, CallBack: (err?: Error|null) => void ) => {
     if ( !SeguroKeyChain ||  !SeguroKeyChain.containerKeyPair || !pass ) {
         const err = `encrypt worker initEncryptObject Error: have no SeguroKeyChain!`
         logger ( err )
@@ -212,29 +204,14 @@ const initEncryptObject = (cmd: worker_command, CallBack: (err?: Error) => void 
     }
     const _SeguroKeyChain = SeguroKeyChain
     const containerKey = _SeguroKeyChain.containerKeyPair
-    const containerKey_obj = containerKey.keyOpenPGP_obj = {
-        privateKeyObj: null,
-        publicKeyObj: null
-    }
-
     const makeKeyChainObj = () => {
         if ( !SeguroKeyChain ) {
             const err = `initEncryptObject makeKeyChainObj !SeguroKeyChain ERROR! `
             logger (err)
             return CallBack ( new Error (err))
         }
-        const _SeguroKeyChain = SeguroKeyChain
-        const deviceKey = _SeguroKeyChain.keyChain.deviceKeyPair
-        const seguroKey = _SeguroKeyChain.keyChain.seguroAccountKeyPair
-        const seguroKey_obj = seguroKey.keyOpenPGP_obj = {
-            privateKeyObj: null,
-            publicKeyObj: null
-        }
-        const deviceKey_obj = deviceKey.keyOpenPGP_obj = {
-            privateKeyObj: null,
-            publicKeyObj: null
-        }
-
+        const deviceKey = SeguroKeyChain.keyChain.deviceKeyPair
+        const seguroKey = SeguroKeyChain.keyChain.seguroAccountKeyPair
         _SeguroKeyChain.toStoreObj = () => {
             const kk: encrypt_keys_object = {
                 containerKeyPair: {
@@ -265,95 +242,66 @@ const initEncryptObject = (cmd: worker_command, CallBack: (err?: Error) => void 
             })
             return kk
         }
+        return async.series ([
+            next => makeDeviceKeyObj (next),
+            next => makeSeguroKeyObj (next)
+        ], CallBack)
 
-        openpgp.readKey ({ armoredKey: containerKey.publicKeyArmor })
-        .then (( n: any ) => {
-            containerKey_obj.publicKeyObj = n
-            return openpgp.readPrivateKey ({ armoredKey: containerKey.privateKeyArmor })
-        }).then ((n: any ) => openpgp.decryptKey ({ privateKey:n, passphrase: pass?.passcode }))
-        .then ((n: any) => {
-            containerKey_obj.privateKeyObj = n
-            return openpgp.readPrivateKey ({ armoredKey: seguroKey.privateKeyArmor })
-        }).then ((n: any ) => {
-            seguroKey_obj.privateKeyObj = n
-            return openpgp.readKey ({ armoredKey: seguroKey.publicKeyArmor })
-        }).then ((n: any) => {
-            seguroKey_obj.publicKeyObj = n
-            return openpgp.readPrivateKey ({ armoredKey: deviceKey.privateKeyArmor })
-        }).then ((n: any) => {
-            deviceKey_obj.privateKeyObj = n
-            return openpgp.readKey ({ armoredKey: deviceKey.publicKeyArmor })
-        }).then ((n: any) => {
-            deviceKey_obj.publicKeyObj = n
-            _SeguroKeyChain.isReady = true
-            
-            if ( pass ) {
-                pass.passcode = pass._passcode = pass.password = ''
-            }
-            return CallBack ()
-        }).catch ((ex: Error) => {
-            return CallBack (ex)
-        })
     }
 
     const unlockContainerKeyPair = () => {
-        
-        openpgp.readPrivateKey ({ armoredKey: containerKey.privateKeyArmor })
-        .then (( n: any ) => openpgp.decryptKey ({ privateKey:n, passphrase: pass?.passcode }))
-        .then (( n: any ) => {
-            containerKey_obj.privateKeyObj = n
-            return openpgp.readKey ({ armoredKey: containerKey.publicKeyArmor })
-        }).then ((n: any) => {
-            containerKey_obj.publicKeyObj = n
-            
+        return makeContainerKeyObj ( err => {
+            if ( err ) {
+                logger (`initEncryptObject makeContainerKeyObj Error`, err )
+                return CallBack (err)
+            }
             if ( !_SeguroKeyChain.keyChain.deviceKeyPair.publicKeyArmor ) {
-                
-                async.waterfall ([
-                    ( next: any ) => {
-                        if ( !SeguroKeyChain?.encryptedString ) {
-                            const err = 'SeguroKeyChain locked but have no SeguroKeyChain.encryptedString ERROR!'
-                            logger ( err )
-                            return next (new Error (err))
-                        }
-                        return decryptWithContainerKey ( SeguroKeyChain.encryptedString, next )
-                    },
-                    ( data: string, next: any ) => {
-                        let sysInit = null
+            
+                if (!SeguroKeyChain?.encryptedString) {
+                    const err = 'SeguroKeyChain locked but have no SeguroKeyChain.encryptedString ERROR!'
+                    logger ( err )
+                    return returnCommand (cmd)
+                }
+                return decryptWithContainerKey ( SeguroKeyChain.encryptedString, (err, data ) =>{
+                    if ( err ) {
+                        return CallBack (err)
+                    }
+                    let sysInit = null
                         const _data = buffer.Buffer.from (data,'base64').toString()
                         try {
                             sysInit = JSON.parse (_data)
                         } catch ( ex ) {
                             const err = 'unlockContainerKeyPair decryptWithContainerKey JSON.parse Error'
-                            next (new Error (err))
-                            return logger ( err)
+                            CallBack (new Error (err))
+                            return logger (err)
+                        }
+                        if ( SeguroKeyChain) {
+                            SeguroKeyChain.keyChain = sysInit.SeguroKeyChain.keyChain
                         }
                         
-                        const _SeguroKeyChain:encrypt_keys_object  = sysInit.SeguroKeyChain
-                        
-                        return createEncryptObject (_SeguroKeyChain, next )
-                    }
-                ], ( err, obj: any ) => {
-                    if ( err ) {
-                        cmd.err = 'OPENPGP_RUNNING_ERROR'
-                        return returnCommand (cmd)
-                    }
-                    SeguroKeyChain = obj
-                    return makeKeyChainObj ()
-                    
+                        return createEncryptObject ( err => {
+                            if ( err ) {
+                                return CallBack (err)
+                            }
+                            return makeKeyChainObj ()
+                        })
                 })
             }
             return makeKeyChainObj ()
-        })
-        .catch ((ex: Error) => {
-            return CallBack ( ex )
         })
     }
 
     if ( !pass.passcode ) {
         return decodePasscode (cmd, (err) => {
+            if ( err ) {
+                logger (`initEncryptObject decodePasscode ERROR!`, err )
+                cmd.err = 'FAILURE'
+                return returnCommand (cmd)
+            }
             return unlockContainerKeyPair ()
         })
     }
+
     return unlockContainerKeyPair ()
 }
 
@@ -380,6 +328,7 @@ const encrypt_TestPasscord = (cmd: worker_command) => {
     }
     
     pass.password = cmd.data[0]
+
     return initEncryptObject (cmd, ( err )=> {
         if ( err ) {
             cmd.err = 'FAILURE'
@@ -390,75 +339,4 @@ const encrypt_TestPasscord = (cmd: worker_command) => {
     })
 }
 
-const encryptWithContainerKey = async ( text: string, CallBack: ( err: Error|null, encryptedText?: string ) => void ) => {
-    if ( !SeguroKeyChain?.isReady ) {
-        logger ('!SeguroKeyChain?.isReady waiting!')
-        setTimeout (() => {
-            return encryptWithContainerKey (text, CallBack )
-        }, 1000)
-        return
-    }
-    logger ('encryptWithContainerKey start!')
-    const encryptObj = {
-        message: await openpgp.createMessage({ text: buffer.Buffer.from (text).toString('base64') }),
-        encryptionKeys: SeguroKeyChain?.containerKeyPair?.keyOpenPGP_obj?.publicKeyObj,
-        signingKeys: SeguroKeyChain?.containerKeyPair?.keyOpenPGP_obj?.privateKeyObj
-    }
-
-    return openpgp.encrypt(encryptObj).then (( encrypted: string ) => {
-        return CallBack ( null, encrypted )
-    }).catch ((ex: Error) => {
-        return CallBack ( ex )
-    })
-
-}
-
-const encrypt_InitSeguroDataToPGP = ( cmd: worker_command ) => {
-
-    if ( !SeguroKeyChain || !SeguroKeyChain.isReady || !systemInitialization ) {
-        logger (`encrypt.js encrypt_InitSeguroDataToPGP error: !SeguroKeyChain?.toStoreObj || !systemInitialization`, cmd )
-        cmd.err = 'INVALID_DATA'
-        return returnCommand(cmd)
-    }
-    
-    const encryptObj = {
-        SeguroKeyChain: SeguroKeyChain.toStoreObj(),
-        Preferences: systemInitialization
-    }
-    
-    return encryptWithContainerKey(JSON.stringify (encryptObj), (err, encryptedText) => {
-        if ( err ) {
-            logger(`encrypt.js encryptWithContainerKey OpenPGP error`, err)
-            cmd.err = 'OPENPGP_RUNNING_ERROR'
-            return returnCommand(cmd)
-        }
-        if ( encryptedText && SeguroKeyChain) {
-            SeguroKeyChain.encryptedString = encryptedText
-        }
-        
-        return storage_StoreContainerData(cmd)
-    })
-
-}
-
-const decryptWithContainerKey = ( encryptedMessage: string, CallBack: (err: Error|null, text?: string) => void) => {
-    let ret = ''
-    openpgp.readMessage({armoredMessage: encryptedMessage})
-    .then ((message: any) => openpgp.decrypt({
-        message,
-        verificationKeys: SeguroKeyChain?.containerKeyPair?.keyOpenPGP_obj?.publicKeyObj,
-        decryptionKeys: SeguroKeyChain?.containerKeyPair?.keyOpenPGP_obj?.privateKeyObj
-    }))
-    .then ((n: any) => {
-        ret = n.data
-        return n.verified
-    })
-    .then ((verified: boolean ) => {
-        return CallBack (null, ret )
-    })
-    .catch (( ex: Error ) => {
-        return CallBack ( ex )
-    })
-}
-
-initEncrypt ()
+initEncryptWorker ()

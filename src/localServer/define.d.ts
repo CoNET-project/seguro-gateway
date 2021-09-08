@@ -55,16 +55,17 @@ interface Window {
 	postMessage(message: any, transfer?: Transferable[]): void;
 }
 
+type keyOpenPGP_obj = {
+	publicKeyObj: any
+	privateKeyObj: any
+}
+
 interface keyPair {
 	publicKeyArmor: string
 	privateKeyArmor: string
 	keyID?: string
-	keyOpenPGP_obj: {
-		publicKeyObj: any
-		privateKeyObj: any
-	} | null
+	keyOpenPGP_obj: keyOpenPGP_obj | null
 	_id?: string
-	
 }
 
 
@@ -83,8 +84,8 @@ interface passInit {
 declare type WorkerCommandError = 'NOT_READY'|'INVALID_DATA'|'NO_UUID'|'INVALID_COMMAND'|'OPENPGP_RUNNING_ERROR'|
 'PouchDB_ERROR'|'GENERATE_PASSCODE_ERROR'|'FAILURE'|'COUNTDOWN'
 
-declare type WorkerCommand = 'helloWorld'|'READY'|'storage_StoreContainerData'|'encrypt_InitSeguroData'|
-	'encrypt_TestPasscord'|'encrypt_createPasscode'
+declare type WorkerCommand = 'helloWorld'|'READY'|
+	'encrypt_TestPasscord'|'encrypt_createPasscode'|'encrypt_lock'
 
 type worker_command = {
 	cmd: WorkerCommand

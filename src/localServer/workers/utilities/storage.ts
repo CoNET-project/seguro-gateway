@@ -6,7 +6,6 @@ const checkStorage = () => {
     }
     
     const initNull = () => {
-
         const data: systemInitialization = {
             preferences: {
                 colorTheme: 'LIGHT',
@@ -35,7 +34,7 @@ const checkStorage = () => {
             return initNull ()
         }
         const initData = cmd.data[0]
-        if (initData.uuid) {
+        if ( systemInitialization_UUID  = initData.uuid ) {
             return getUUIDFragments (cmd.data[0].uuid, ( err, data: any ) => {
                 if ( err ) {
                     logger (`checkStorage getUUIDFragments [${ cmd.data[0] }] ERROR`, err )
@@ -102,7 +101,7 @@ const storeContainer = ( preferencesUUID: string, CallBack: ( err?: Error ) => v
             preferences: systemInitialization?.preferences
         })).toString ('base64')
     }
-    database.get ('init')
+    return database.get ('init')
     .then(res => database?.remove (res))
     .then(() => database?.put(putData))
     .then(() => CallBack())
@@ -128,7 +127,7 @@ const getUUIDFragments = ( uuid: string, CallBack: ( ex: Error|null, data?: Pouc
     })
 }
 
-const storeUUIDFragments = ( encrypted: string, CallBack: ( ex: Error|null, data?: any ) => void ) => {
+const storeUUID_Fragments = ( encrypted: string, CallBack: ( ex: Error|null, data?: any ) => void ) => {
     if ( !database ) {
         database = new PouchDB('SEGURO', { auto_compaction: true })
     }
@@ -138,22 +137,41 @@ const storeUUIDFragments = ( encrypted: string, CallBack: ( ex: Error|null, data
     
     database?.post( putData )
     .then( data => CallBack ( null, data ))
-    .catch ( ex => {
-        CallBack ( ex )
-    })
-    
+    .catch ( ex => CallBack ( ex ))
+}
+
+const deleteUUID_DFragments = (uuid: string, CallBack: (ex: Error|null) => void ) => {
+    if ( !database ) {
+        database = new PouchDB('SEGURO', { auto_compaction: true })
+    }
+    if ( !uuid ) {
+        const err = 'deleteUUID_DFragments uuid have NONE Error'
+        logger (err)
+        return CallBack (new Error (err))
+    }
+    return database.get (uuid)
+        .then ( res => database?.remove (res))
+        .then (() => CallBack(null))
+        .catch(ex => CallBack (ex))
 }
 
 const storage_StoreContainerData = (cmd: worker_command) => {
     
-    const encryptedText = SeguroKeyChain?.encryptedString ? SeguroKeyChain.encryptedString : ''
-    
+    const encryptedText = SeguroKeyChain?.encryptedString ||''
+    const oldUuid = systemInitialization_UUID
     logger ('storage_StoreContainerData start!')
     return async.waterfall ([
-        (next: any) => storeUUIDFragments ( encryptedText, next ),
+        (next:any) => {
+            if (!oldUuid) {
+                return next ()
+            }
+            return deleteUUID_DFragments (oldUuid, next)
+        },
+        (next: any) => storeUUID_Fragments ( encryptedText, next ),
         ( data: any, next: any )  => {
             logger (`storeUUIDFragments SUCCESS UUID = [${ data.id }]`)
-            storeContainer ( data.id, next )
+            systemInitialization_UUID = data.id
+            return storeContainer ( data.id, next )
         },
     ], err => {
         if ( err ) {
