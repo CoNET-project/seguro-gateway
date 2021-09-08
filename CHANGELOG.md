@@ -1,5 +1,19 @@
 # `seguro-gateway` CHANGELOG
 
+## `0.11.0`
+
+### Additions
+
+- LOCK
+
+### Changes
+
+- None.
+
+### Fixes
+
+- 
+
 ## `0.10.1`
 
 ### Additions
