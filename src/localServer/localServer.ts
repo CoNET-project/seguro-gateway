@@ -7,7 +7,6 @@ import * as fse from 'fs-extra'
 import { imapAccountTest } from './utilities/Imap'
 import { inspect } from 'util'
 import { testImapServer, getInformationFromSeguro, buildConnect } from './utilities/network'
-import type { ClientRequest } from 'http'
 const cors = require('cors')
 
 const getEncryptedMessagePublicKeyID = async ( encryptedMessage: string, CallBack: ( err?: Error|null, data?: string[]) => void ) => {
