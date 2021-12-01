@@ -58,7 +58,7 @@ const encryptWorkerDoCommand = ( cmd: worker_command ) => {
         }
 
         case 'storePreferences': {
-            return 
+            return storePreferences (cmd)
         }
 
         default: {
