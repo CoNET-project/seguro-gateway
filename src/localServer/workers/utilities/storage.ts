@@ -1,10 +1,7 @@
 const returnInitNull = (cmd: worker_command) => {
     const data: systemInitialization = {
         preferences: {
-            preferences: {
-                colorTheme: 'LIGHT',
-                language: 'en-CA'
-            }
+            preferences: null
         },
         passcode: {
             status: 'NOT_SET'
@@ -221,10 +218,7 @@ const returnSeguroInitializationData = (cmd: worker_command) => {
     })
     const data: systemInitialization = {
         preferences: {
-            preferences: {
-                colorTheme: preferences.preferences.colorTheme,
-                language: preferences.preferences.language
-            }
+            preferences: preferences.preferences
         },
         passcode: {
             status: 'UNLOCKED'
