@@ -1,5 +1,6 @@
 # `seguro-gateway` CHANGELOG
 
+
 ## `0.15.2`
 
 ### Additions
@@ -16,6 +17,8 @@
 
 
 ---
+
+=======
 
 ## `0.15.1`
 
