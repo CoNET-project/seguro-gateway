@@ -11,7 +11,7 @@
         "lint": "jest",
         "test": "jest",
         "buildAndy": "tsc --project ./tsconfig.build.json && cp -r node_modules/@conet-project/seguro-platform/build ./build/launcher",
-        "build": "tsc --project ./tsconfig.build.json; cp src/localServer/workers/utilities/openpgp.*  build/localServer/workers/utilities/",
+        "build": "tsc --project ./tsconfig.build.json && cp src/localServer/workers/utilities/openpgp.*  build/localServer/workers/utilities/",
         "clean": "rm -rf ./node_modules ./build",
         "local": "node build/localServer/index"
     },
