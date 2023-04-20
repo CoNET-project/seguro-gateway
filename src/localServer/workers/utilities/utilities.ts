@@ -905,7 +905,6 @@ const getHtmlHeadersV2 = (rawHeaders: string|undefined, remoteSite: string ) => 
 	headerResult[`access-control-allow-credentials`] = `true`
 	return headerResult
 }
-
 const getHtmlHeaders = (rawHtml: string = '', remoteSite: string) => {
 	const headers = [
 		'content-type',
@@ -944,8 +943,6 @@ const getHtmlHeaders = (rawHtml: string = '', remoteSite: string) => {
 	headerResult['Access-Control-Allow-Credentials'] = true
 	return headerResult
 }
-
-
 
 const _getNftArmoredPublicKey = (gatewayNode): Promise<string> => {
 	return new Promise( async resolve => {
@@ -1772,8 +1769,8 @@ const preProxyConnect = async (cmd: worker_command) => {
 		let textContent = await decryptFetchBody(password, text)
 	
 		logger (`Stream ready for service worker [${_site.href}]`)
-
 		const { body, rawHeader,status, statusText } = fixHtmlLinks(textContent)
+
 		
 		cmd.data=[body, getHtmlHeadersV2(rawHeader, site.origin), {status, statusText }, gatewayNode]
 		return responseChannel.postMessage(JSON.stringify(cmd))
@@ -2076,6 +2073,7 @@ const decryptFetchBody = async (password: string, textBuffer: string ) => {
 		}
 
 		// logger (`findBlock process block number ${++count}! bodyLength part get body length = [${bodyLength}] body.length [${body.length }]`)
+
 
 		_ret += await CoNETModule.aesGcmDecrypt (body, password)
 	}
