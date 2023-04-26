@@ -5,6 +5,7 @@ let workerReady = false
 let CoNET_Data: encrypt_keys_object | null = null
 let containerKeyObj: keyPair|null = null
 let preferences: any = null
+const responseChannel = new BroadcastChannel('toServiceWroker')
 const databaseName = 'CoNET'
 const channel = new BroadcastChannel('toMainWroker')
 let activeNodes: nodes_info[]|null= null

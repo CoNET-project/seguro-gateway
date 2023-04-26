@@ -391,3 +391,12 @@ interface urlData {
 	method: string
 	json: string
 }
+
+type fetchCashStorageData = {
+	headers: {
+		[key: string]: string | boolean
+	}
+	body: string
+	status: number
+	statusText: string
+}

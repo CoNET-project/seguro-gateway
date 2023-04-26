@@ -1724,12 +1724,21 @@ const createProxyConnect = async (currentProfile: profile, entryNode: nodes_info
 }
 
 const preProxyConnect = async (cmd: worker_command) => {
-	logger ('******************** preProxyConnect **********************\n',cmd)
-	const entryNode = await getRandomNode()
+
+	logger ('******************** preProxyConnect **********************\n', cmd)
+	const _site: urlData = cmd.data[0]
 	const gatewayNode = (cmd.data.length > 2 && cmd.data[2]) ? cmd.data[2] : await getRandomNode()
+	const cacheStore = await cacheProfile (_site)
+	if ( cacheStore ) {
+		cmd.data=[cacheStore.body, cacheStore.headers, {status: cacheStore.status, statusText: cacheStore.statusText }, gatewayNode]
+		return responseChannel.postMessage(JSON.stringify(cmd))
+	}
+	
+	const entryNode = await getRandomNode()
+	
 	// const gatewayNode = await getNodeByIpaddress ('74.208.33.24')
 
-	const responseChannel = new BroadcastChannel('toServiceWroker')
+
 
 	if ( !entryNode|| !gatewayNode ||! CoNET_Data?.profiles) {
 		cmd.err = 'NOT_INTERNET'
@@ -1738,8 +1747,9 @@ const preProxyConnect = async (cmd: worker_command) => {
 
 	const currentProfile = CoNET_Data.profiles[CoNET_Data.profiles.findIndex(n => n.isPrimary)]
 
-	const _site: urlData = cmd.data[0]
+	
 	const site = new URL (_site.href)
+
 
 	cmd.data = [await createProxyConnect ( currentProfile, entryNode, gatewayNode, cmd.data)]
 
@@ -1753,7 +1763,7 @@ const preProxyConnect = async (cmd: worker_command) => {
 	const encryptedCommand = requestCmd.requestData[0]
 	const password = requestCmd.requestData[2]
 
-	fetch (url, 
+	return fetch (url, 
 	{
 		method: 'POST',
 		headers: {
@@ -1767,13 +1777,15 @@ const preProxyConnect = async (cmd: worker_command) => {
 		return res.text()
 	}).then ( async text => {
 		let textContent = await decryptFetchBody(password, text)
-	
 		logger (`Stream ready for service worker [${_site.href}]`)
 		const { body, rawHeader,status, statusText } = fixHtmlLinks(textContent)
-
-		
-		cmd.data=[body, getHtmlHeadersV2(rawHeader, site.origin), {status, statusText }, gatewayNode]
-		return responseChannel.postMessage(JSON.stringify(cmd))
+		const headers = getHtmlHeadersV2(rawHeader, site.origin)
+		cmd.data=[body, headers, {status, statusText }, gatewayNode]
+		responseChannel.postMessage(JSON.stringify(cmd))
+		if (_site.method === 'GET' && status === 200) {
+			const hash = CoNETModule.Web3Utils.sha3(_site.href)
+			await storageCache (hash, {body, headers, status, statusText})
+		}
 	}).catch (ex=> {
 		logger (`*************************  WORKER FETCH ERROR!  ************************* `)
 		logger (_site.href)
