@@ -61,7 +61,6 @@ const CoNETModule: CoNET_Module = {
 	}
 }
 
-
 const messageListen = e => {
 	let cmd: worker_command 
 
@@ -82,11 +81,9 @@ const messageListen = e => {
 }
 channel.addEventListener('message', messageListen )
 
-
 self.onhashchange = () => {
 	channel.removeEventListener('message', messageListen)
 }
-
 
 const initEncryptWorker = async () => {
 	
@@ -128,6 +125,8 @@ const initEncryptWorker = async () => {
     checkStorage ()
 	activeNodes = await _getSINodes ('CUSTOMER_REVIEW', 'USA')
 }
+
+
 /**
  * 		
  */

@@ -6,6 +6,7 @@ declare const async: any
 declare const JSZip: any
 declare const PouchDB: any
 
+
 interface imapConnect {
 	imapServer: string
 	imapUserName: string
