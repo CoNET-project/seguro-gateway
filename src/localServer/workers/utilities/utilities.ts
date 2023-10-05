@@ -2016,6 +2016,7 @@ const preProxyConnect = async (cmd: worker_command) => {
 
 	logger ('******************** preProxyConnect **********************\n', cmd)
 	const _site: urlData = cmd.data[0]
+
 	const gatewayNode = (cmd.data.length > 2 && cmd.data[2]) ? cmd.data[2] : await getRandomNode()
 	//const gatewayNode = await getNodeByIpaddress('108.175.5.112')
 	
@@ -2027,7 +2028,7 @@ const preProxyConnect = async (cmd: worker_command) => {
 	
 	const entryNode = await getRandomNode()
 	
-	
+
 	//const entryNode = await getNodeByIpaddress('74.208.55.241')
 
 
