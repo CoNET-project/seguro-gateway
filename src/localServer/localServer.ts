@@ -193,7 +193,6 @@ class LocalServer {
         app.use( cors ())
 		app.use ( express.static ( staticFolder ))
         //app.use ( express.static ( launcherFolder ))
-
 		app.use ( express.static ( staticFolder1 ))
         app.use ( express.json() )
 
@@ -321,6 +320,10 @@ class LocalServer {
             
         // })
 
+        app.get ('./sw.js', ( req, res ) => {
+            logger (`./sw.js`)
+
+        })
         app.post ( '/postMessage', ( req: express.Request, res: express.Response ) => {
             const post_data: postData = req.body
             console.log ( inspect ( post_data, false, 3, true ))
