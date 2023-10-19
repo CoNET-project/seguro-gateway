@@ -5,32 +5,32 @@ let workerReady = false
 let CoNET_Data: encrypt_keys_object | null = null
 let containerKeyObj: keyPair|null = null
 let preferences: any = null
-const CoNET_SI_Network_Domain = 'openpgp.online'
-const conet_DL_endpoint = `https://${ CoNET_SI_Network_Domain }/api/conet-faucet`
-const conet_DL_getUSDCPrice_Endpoint = `https://${ CoNET_SI_Network_Domain }/api/conet-price`
-const conet_DL_getSINodes = `https://${ CoNET_SI_Network_Domain }/api/conet-si-list`
-const conet_DL_authorizeCoNETCashEndpoint = `https://${ CoNET_SI_Network_Domain }/api/authorizeCoNETCash`
-const conet_DL_regiestProfile = `https://${ CoNET_SI_Network_Domain }/api/regiestProfileRoute`
-const conet_DL_publishGPGKeyArmored = `https://${ CoNET_SI_Network_Domain }/api/publishGPGKeyArmored`
+const CoNET_SI_Network_Domain = 'https://openpgp.online'
+const conet_DL_endpoint = `${ CoNET_SI_Network_Domain }/api/conet-faucet`
+const conet_DL_getUSDCPrice_Endpoint = `${ CoNET_SI_Network_Domain }/api/conet-price`
+const conet_DL_getSINodes = `${ CoNET_SI_Network_Domain }/api/conet-si-list`
+const conet_DL_authorizeCoNETCashEndpoint = `${ CoNET_SI_Network_Domain }/api/authorizeCoNETCash`
+const conet_DL_regiestProfile = `${ CoNET_SI_Network_Domain }/api/regiestProfileRoute`
+const conet_DL_publishGPGKeyArmored = `${ CoNET_SI_Network_Domain }/api/publishGPGKeyArmored`
 const gasFee = 30000
-const wei = 1000000000000000000
+const wei = 10**18
+const gwei = 10**9
 const denominator = 1000000000000000000
 const gasFeeEth = 0.000526
 const GasToEth = 0.00000001
 const USDC_exchange_Addr = '0xD493391c2a2AafEd135A9f6164C0Dcfa9C68F1ee'
-const buyUSDCEndpoint = `https://${ CoNET_SI_Network_Domain }/api/exchange_conet_usdc`
-const mintCoNETCashEndpoint = `https://${ CoNET_SI_Network_Domain }/api/mint_conetcash`
+const buyUSDCEndpoint = `${ CoNET_SI_Network_Domain }/api/exchange_conet_usdc`
+const mintCoNETCashEndpoint = `${ CoNET_SI_Network_Domain }/api/mint_conetcash`
 const openSourceEndpoint = 'https://s3.us-east-1.wasabisys.com/conet-mvp/router/'
-
-
 
 const responseChannel = new BroadcastChannel('toServiceWroker')
 const databaseName = 'CoNET'
 const channel = new BroadcastChannel('toMainWroker')
 let activeNodes: nodes_info[]|null= null
+
 const CoNETModule: CoNET_Module = {
 	EthCrypto: null,
-	Web3HttpProvider:  null,
+	Web3Providers:  null,
 	Web3EthAccounts: null,
 	Web3Eth: null,
 	Web3Utils: null,
@@ -79,6 +79,7 @@ const CoNETModule: CoNET_Module = {
 		}
 	}
 }
+
 let ClientIDworker = ''
 const backGroundPoolWorker: clientPoolWroker[] = []
 
@@ -115,12 +116,176 @@ const initEncryptWorker = async () => {
 		cmd: 'READY',
 		data: []
 	}
+
 	responseChannel.postMessage(JSON.stringify(cmd))
 	
     checkStorage ()
 }
 
-const channelWorkerDoCommand = (e => {
+
+const gettPrimaryProfile = () => {
+	if (!CoNET_Data ||!CoNET_Data?.profiles) {
+		return ''
+	}
+	const index = CoNET_Data.profiles.findIndex(n => n.isPrimary)
+	const profiles = CoNET_Data.profiles[index]
+	return profiles
+}
+
+const getPrimaryBalance = async (cmd: worker_command) => {
+
+	const profile = gettPrimaryProfile()
+
+	if (!profile||!profile.keyID) {
+		logger(`getPrimaryBalance`)
+		cmd.err = 'NOT_STRIPE'
+		return returnUUIDChannel (cmd)
+	}
+	const eth = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(getRandomCoNETEndPoint()))
+	const uuu = await eth.eth.getBalance(profile.keyID)
+	const balance = parseInt(uuu)/denominator
+
+	cmd.data = [profile.keyID, balance, profile.network.recipients]
+
+	returnUUIDChannel (cmd)
+}
+
+const returnUUIDChannel = (cmd: worker_command) => {
+	if (!cmd.uuid) {
+		return logger(`getPrimaryBalance cmd uuid is null`, cmd)
+	}
+	const sendChannel = new BroadcastChannel(cmd.uuid)
+	sendChannel.postMessage (JSON.stringify(cmd))
+	sendChannel.close()
+}
+
+const getRandomRegionNode = (nodes: nodes_info[], count: number) => {
+
+	const uu = nodes.slice(0, count)
+	return uu
+	
+}
+
+const filterNodes = (_nodes: nodes_info[], key: string) => {
+	const u = new RegExp(key, 'i')
+	const ret = _nodes.filter (n => u.test(n.country))
+	return ret
+}
+
+const sendCONET = async (node: nodes_info, amount: string, profile: profile) => {
+	const network = getRandomCoNETEndPoint()
+	const wallet = node.wallet_addr
+	const history = profile.tokens.conet.history
+
+	const {eth} = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(network))
+	const sendObj = {
+		from     : '0x'+profile.keyID?.substring(2),
+		to       : '0x'+ wallet.substring(2),
+		data     : ''
+	}
+
+	const balance = (await eth.getBalance(profile.keyID)).toString()
+
+
+	const gas = (await eth.estimateGas(sendObj)).toString()
+	const gasPrice = (await eth.getGasPrice()).toString()
+	const totalGas = gas * gasPrice
+	sendObj['gas'] = gas
+	sendObj['gasPrice'] = gasPrice
+
+	let _amount = parseFloat(amount)* wei - totalGas
+	if ( balance < _amount) {
+		_amount = balance - totalGas
+	}
+	sendObj['value'] = _amount.toString()
+	const createTransaction = await eth.accounts.signTransaction( sendObj,'0x'+profile.privateKeyArmor.substring(2))
+	let receipt: CryptoAssetHistory
+	try {
+		receipt = await eth.sendSignedTransaction (createTransaction.rawTransaction )
+	} catch (ex) {
+		logger (`sendCONET eth.sendSignedTransaction Error`, ex)
+		return node
+	}
+	receipt.value = _amount/10**18
+	receipt.isSend = true
+	receipt.time = new Date().toISOString()
+	receipt = changeBigIntToString (receipt)
+	history.unshift (receipt)
+	if (!node.receipt) {
+		node.receipt = []
+	}
+	node.receipt.unshift(receipt)
+	return node
+}
+
+
+const getNodeCollect = async (cmd: worker_command) => {
+	const uu:regionType = cmd.data[0]
+	const profile = gettPrimaryProfile()
+
+	if (!activeNodes?.length || !CoNET_Data || !uu ||!profile ||!profile.keyID) {
+		cmd.err = 'NOT_READY'
+		return returnUUIDChannel(cmd)
+	}
+
+	await getAllProfileBalance ()
+	const conetTokenBalance = profile.tokens.conet.balance
+	if (conetTokenBalance < 1) {
+		cmd.err = 'FAILURE'
+		return returnUUIDChannel(cmd)
+	}
+	
+	const _nodes = activeNodes
+	const k: string[] = []
+	if (uu.sp) k.push('ES')
+	if (uu.us) k.push ('US')
+	if (uu.fr) k.push ('FR')
+	if (uu.uk) k.push ('GB')
+	if (uu.ge) k.push('DE')
+	let SaaSNodes: nodes_info[]
+	switch (k.length) {
+		case 1: {
+			SaaSNodes = getRandomRegionNode(filterNodes(_nodes, k[0]), 4)
+			break
+		}
+		case 2: {
+			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 2), ...getRandomRegionNode(filterNodes(_nodes, k[1]), 2)]
+			break
+		}
+		case 3: {
+			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 1), ...getRandomRegionNode(filterNodes(_nodes, k[1]), 1),...getRandomRegionNode(filterNodes(_nodes, k[2]), 2)]
+			break
+		}
+		default : {
+			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 1),...getRandomRegionNode(filterNodes(_nodes, k[1]), 1),...getRandomRegionNode(filterNodes(_nodes, k[2]), 1), ...getRandomRegionNode(filterNodes(_nodes, k[3]), 1)]
+		}
+	}
+	const balance = profile.tokens.conet.balance
+	const sendAmount = balance / SaaSNodes.length
+	for (let i = 0; i < SaaSNodes.length; i ++) {
+		SaaSNodes[i]  = await sendCONET(SaaSNodes[i], sendAmount.toString(), profile)
+	}
+
+	profile.network.recipients.unshift(...SaaSNodes)
+	cmd.data[0] = profile.network.recipients
+	const url = `${self.location.origin}/conet-profile`
+	postToEndpoint(url, true, { profile, activeNodes })
+	return storeProfile (cmd, () => {
+		return returnUUIDChannel (cmd)
+	})
+}
+
+const getRegiestNodes = (cmd: worker_command) => {
+	const profile = gettPrimaryProfile()
+	if (!profile) {
+		cmd.err = 'NOT_READY'
+		return returnUUIDChannel (cmd)
+	}
+	cmd.data[0] = profile.network.recipients
+	return returnUUIDChannel (cmd)
+}
+
+const channelWorkerDoCommand = (async e => {
 	const jsonData = buffer.Buffer.from ( e.data ).toString()
 	let cmd: worker_command
 	try {
@@ -137,6 +302,7 @@ const channelWorkerDoCommand = (e => {
 		case 'urlProxy': {
 			return preProxyConnect (cmd)
 		}
+
 		case 'saveDomain': {
 			const domain: URL = cmd.data[0]
 			const id = cmd.data[1]
@@ -177,11 +343,42 @@ const channelWorkerDoCommand = (e => {
 			logger (`Worker encryptWorkerDoCommand got getWorkerClientID ClientIDworker = [${ClientIDworker}]`)
 			return responseChannel.postMessage(JSON.stringify(cmd))
 		}
+
+		case 'getFaucet' : {
+			cmd.data[0] = gettPrimaryProfile ()
+
+			if (!cmd.data[0] || !cmd.data[0].keyID) {
+				cmd.err = 'NO_UUID'
+				return returnUUIDChannel (cmd)
+			}
+			cmd.data[0] = cmd.data[0].keyID
+			return getFaucet (cmd, () => {
+				if (cmd.err) {
+					return returnUUIDChannel (cmd)
+				}
+				return getPrimaryBalance (cmd)
+			})
+		}
+
+		case 'setRegion': {
+			
+			return getNodeCollect(cmd)
+		}
+
+		case 'getRegiestNodes': {
+			return getRegiestNodes (cmd)
+		}
+
+		case 'getCONETBalance': {
+			return getPrimaryBalance (cmd)
+		}
+
 	
 		default: {
 			cmd.err = 'INVALID_COMMAND'
 			responseChannel.postMessage(JSON.stringify(cmd))
-			return console.log (`channelWorkerDoCommand unknow command!`)
+			
+			return console.log (`channelWorkerDoCommand unknow command!`, cmd)
 		}
 	}
 
@@ -193,4 +390,3 @@ const channelWorkerDoCommand = (e => {
 
 
 initEncryptWorker()
-

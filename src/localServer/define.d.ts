@@ -52,6 +52,7 @@ type nodes_info = {
 	disable?: boolean
 	armoredPublicKey?: string
 	CoNETCashWalletAddress: string
+	receipt: CryptoAssetHistory[]
 }
 
 interface connect_imap_reqponse {
@@ -155,12 +156,12 @@ declare type seguroError = 'TIMEOUT_EMAIL_SERVER' | 'TIMEOUT_SEGURO_NETWORK' |
 
 declare type verification = 'INCORRECT_CODE'
 
-declare type WorkerCommand = 'READY'|
+declare type WorkerCommand = 'READY'|'getRegiestNodes'|
 	'encrypt_TestPasscode'|'encrypt_createPasscode'|'encrypt_lock'|'invitation'|'encrypt_deletePasscode'|
-	'storePreferences'|'newProfile'|'storeProfile'|
-	'getFaucet'|'isAddress'|'syncAsset'|'sendAsset'|'getUSDCPrice'|'buyUSDC'|
+	'storePreferences'|'newProfile'|'storeProfile'|'urlProxy'|'saveDomain'|'getDomain'|'setRegion'|
+	'getFaucet'|'isAddress'|'syncAsset'|'sendAsset'|'getUSDCPrice'|'buyUSDC'|'getWorkerClientID'|
 	'mintCoNETCash'|'getSINodes'|'getRecipientCoNETCashAddress'|'getUserProfile'|
-	'sendMessage'|'incomeData'|'WORKER_MESSAGE'|
+	'sendMessage'|'incomeData'|'WORKER_MESSAGE'|'getCONETBalance'|
 	//		from service worker
 	'urlProxy'|'saveDomain'|'getDomain'|'getWorkerClientID'
 
@@ -197,6 +198,13 @@ interface keyPair {
 		privateKeyObj: any
 	}
 }
+type regionType = {
+    us: boolean,
+    uk: boolean,
+    ge: boolean,
+    sp: boolean,
+    fr: boolean
+}
 interface profile extends keyPair {
     nickname?: string
     tags?: string[]
@@ -204,17 +212,14 @@ interface profile extends keyPair {
 	bio?: string
     profileImg?: string
 	note?: string[]
-	recipient?: recipientNode
 	isPrimary?: boolean
 	pgpKey?: pgpKeyPair
 	emailAddr?: string
 	tokens: {
 		conet:CryptoAsset
 	}
-	network?: {
-		entrys: nodes_info[]
+	network: {
 		recipients: nodes_info[]
-		payment?: CryptoAssetHistory[]
 	}
 
 }
@@ -325,7 +330,7 @@ interface webEndpointConnect {
 
 interface CoNET_Module {
 	EthCrypto: any
-	Web3HttpProvider: any
+	Web3Providers: any
 	Web3EthAccounts: any
 	Web3Eth: any
 	Web3Utils: any
@@ -460,4 +465,14 @@ interface VE_IPptpStream {
     hostIPAddress: string|null
     hostName?: string       //      for test gateway from client
 	order: number
+}
+
+type proxyLogs =  {
+	hostInfo: string
+	ssl: Boolean,
+	startTime: number,
+	download: number,
+	upload: number,
+	nodeIpaddress: string,
+	endTime: number
 }

@@ -191,14 +191,14 @@ const deleteExistDB = async () => {
     return await database.destroy()
 }
 
-const storeProfile = async (cmd: worker_command) => {
+const storeProfile = async (cmd: worker_command, callback?) => {
 	const _profiles: profile[] = cmd?.data[0]
 	if ( !CoNET_Data || !CoNET_Data.profiles ) {
 		cmd.err = 'INVALID_DATA'
-		return returnCommand (cmd)
+		return callback ? callback () : returnCommand (cmd)
 	}
 	delete cmd.err
-	returnCommand (cmd)
+	callback ? callback () : returnCommand (cmd)
 
 	if ( _profiles.length && typeof _profiles.filter === 'function'){
 		CoNET_Data.profiles = CoNET_Data.profiles.map (n => {

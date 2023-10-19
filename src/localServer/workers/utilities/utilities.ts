@@ -1,6 +1,6 @@
 
 
-const CoNETNet = [`https://rpc1.${CoNET_SI_Network_Domain}`]
+const CoNETNet = [`https://rpc1.openpgp.online`]
 
 // const usdcNet = 'https://rpc1.openpgp.online/usdc'
 
@@ -18,13 +18,6 @@ const logger = (...argv: any ) => {
     return console.log ( dateStrang, 'color: #dcde56',  ...argv)
 }
 
-const getRamdomEntryNode = (currentProfile: profile ) => {
-	if (!currentProfile.network) {
-		return null
-	}
-	const index = ( currentProfile.network.entrys.length === 1) ? 0: Math.round(Math.random() * currentProfile.network.entrys.length-1)
-	return currentProfile.network.entrys[index]
-}
 
 const isAllNumbers = ( text: string ) => {
     return ! /\D/.test ( text )
@@ -344,7 +337,10 @@ const initCoNET_Data = ( passcode = '' ) => {
 		publicKeyArmor: CoNETModule.EthCrypto.publicKeyByPrivateKey (acc[0].privateKey),
 		keyID: acc[0].address.substring(0,2) + acc[0].address.substring(2).toUpperCase(),
 		isPrimary: true,
-		privateKeyArmor: acc[0].privateKey
+		privateKeyArmor: acc[0].privateKey,
+		network: {
+			recipients: []
+		}
 	}
 	
 	return  CoNET_Data.profiles = [profile]
@@ -373,8 +369,10 @@ const makeContainerPGPObj = async () => {
 
 
 const getCONETBalance = async (Addr: string) => {
-	const eth = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(getRandomCoNETEndPoint()))
-	const uuu = await eth.getBalance(Addr)
+	const provider = new CoNETModule.Web3Eth(CoNETNet[0])
+	const eth = new CoNETModule.Web3Eth(provider)
+
+	const uuu = await eth.eth.getBalance(Addr)
 	const balance = parseInt(uuu)/denominator
 	return balance
 }
@@ -426,7 +424,6 @@ const getAllProfileBalance = () => {
 		}
 
 		return resolve (null)
-		
 	})
 	
 }
@@ -443,6 +440,7 @@ const postToEndpoint = ( url: string, post: boolean, jsonData ) => {
 
 			if (xhr.status === 200) {
 				// parse JSON
+				logger(`postToEndpoint [${url}] xhr.status[${xhr.status === 200}] !== 200`)
 				if ( !xhr.responseText.length ) {
 					return resolve ('')
 				}
@@ -460,7 +458,7 @@ const postToEndpoint = ( url: string, post: boolean, jsonData ) => {
 				return resolve (ret)
 			}
 
-			return reject(new Error (`status is not 200 ${ xhr.responseText }`))
+			return reject(new Error (`${ url } status is not 200 Error${ xhr.responseText }`))
 		}
 
 		xhr.open( post? 'POST': 'GET', url, true )
@@ -470,11 +468,25 @@ const postToEndpoint = ( url: string, post: boolean, jsonData ) => {
 
 		const timeCount = setTimeout (() => {
 			const Err = `postToEndpoint Timeout!`
-			logger (`postToEndpoint Error`, Err )
+			logger (`postToEndpoint Timeout Error`, Err )
 			reject (new Error ( Err ))
 		}, XMLHttpRequestTimeout )
 	})
 	
+}
+
+const changeBigIntToString = (Obj: any) => {
+	const keys = Object.keys(Obj)
+	if (!keys?.length ) {
+		return Obj
+	}
+	for (let i of keys) {
+		const item = Obj[i]
+		if (typeof item === 'bigint') {
+			Obj[i] = Obj[i].toString()
+		}
+	}
+	return Obj
 }
 
 const getProfileFromKeyID = (keyID: string) => {
@@ -488,13 +500,13 @@ const getProfileFromKeyID = (keyID: string) => {
 	return CoNET_Data.profiles[profileIndex]
 }
 
-const getFaucet = async ( cmd: worker_command ) => {
+const getFaucet = async ( cmd: worker_command, callback ) => {
 	const keyID = cmd.data[0]
 	let profile: null| profile
 
 	if (!keyID || !(profile = getProfileFromKeyID (keyID))) {
 		cmd.err = 'INVALID_DATA'
-		return returnCommand (cmd)
+		return callback? callback (cmd) : returnCommand (cmd)
 	}
 
 	delete cmd.err
@@ -502,17 +514,17 @@ const getFaucet = async ( cmd: worker_command ) => {
 	try {
 		result = await postToEndpoint(conet_DL_endpoint, true, { walletAddr: keyID })
 	} catch (ex) {
-		logger (`postToEndpoint [${conet_DL_endpoint}] error!`)
+		logger (`postToEndpoint [${conet_DL_endpoint}] error! `, ex)
 		cmd.err = 'FAILURE'
-		returnCommand (cmd)
+		callback ? callback(cmd) : returnCommand (cmd)
 		return logger (`postToEndpoint ${conet_DL_endpoint} ERROR!`)
 	}
 	
 	if (!result?.txHash ) {
 		
 		cmd.err = 'FAILURE'
-		returnCommand (cmd)
-		logger (`postToEndpoint ${conet_DL_endpoint} ERROR!`)
+		callback? callback (cmd) : returnCommand (cmd)
+		return logger (`postToEndpoint ${conet_DL_endpoint} ERROR!`)
 	}
 
 	logger (`postToEndpoint [${ conet_DL_endpoint }] SUCCESS`)
@@ -520,20 +532,21 @@ const getFaucet = async ( cmd: worker_command ) => {
 	logger (`result = ${result}` )
 
 	if ( result.txHash) {
-		const receipt = await getTxhashInfo (result.txHash, getRandomCoNETEndPoint())
+		let receipt = await getTxhashInfo (result.txHash, getRandomCoNETEndPoint())
 		receipt.isSend = false
 		receipt.time = new Date().toISOString()
+		receipt = changeBigIntToString(receipt)
 		profile.tokens.conet.history.push (receipt)
 	}
 	
-	return storeProfile (cmd)
+	return storeProfile (cmd, callback)
 }
 
 
-const syncAsset = async (cmd: worker_command) => {
+const syncAsset = async (cmd: worker_command, Callback?) => {
 	await getAllProfileBalance ()
 	cmd.data = [CoNET_Data]
-	return returnCommand (cmd)
+	return Callback ? Callback (cmd) : returnCommand (cmd)
 }
 
 
@@ -682,12 +695,12 @@ const getTxhashInfo = async (txhash: string, network: string) => {
 	const eth = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(network))
 	let receipt
 	try {
-		receipt = await eth.getTransaction(txhash)
+		receipt = await eth.eth.getTransaction(txhash)
 	} catch (ex) {
 		logger (`getTxhashInfo Error from [${ network }]`, ex )
 		return null
 	}
-	receipt.value = receipt.value/wei
+	receipt.value = receipt.value.toString()/wei
 	return receipt
 }
 
@@ -830,22 +843,6 @@ const checkAllRowsCurrentSetups = (rows: nodes_info[], setups: nodes_info[]) => 
 }
 
 
-
-const checkAllRowsCurrentRecipients = (rows: nodes_info[]) => {
-	if (!CoNET_Data?.profiles?.length) {
-		return
-	}
-	const currentProfile = CoNET_Data.profiles.filter ( n => n.isPrimary )[0]
-
-	if ( currentProfile?.network?.recipients ) {
-		checkAllRowsCurrentSetups (rows, currentProfile.network.recipients )
-	}
-	if ( currentProfile?.network?.entrys ) {
-		checkAllRowsCurrentSetups (rows, currentProfile.network.entrys )
-	}
-	
-}
-
 const getHtmlHeadersV2 = (rawHeaders: string|undefined, remoteSite: string ) => {
 
 	if (!rawHeaders?.length) {
@@ -960,8 +957,6 @@ const _getSINodes = async (sortby: SINodesSortby, region: SINodesRegion) => {
 			n.customs_review_total = parseFloat(n.customs_review_total.toString())
 			// n.armoredPublicKey = await _getNftArmoredPublicKey (n)
 		})
-
-		checkAllRowsCurrentRecipients (rows)
 		
 	} else {
 		logger (`################ _getSINodes get null nodes Error! `)
@@ -1223,7 +1218,8 @@ const sendForwardToNode = (currentProfile: profile, client: clientProfile, messa
 		} catch (ex){
 			logger (ex)
 		}
-		const entryNode = getRamdomEntryNode (currentProfile)
+
+		const entryNode = await getRandomNode ()
 	
 		if (!entryNode) {
 			return resolve (null)
@@ -1438,11 +1434,11 @@ const connectToRecipient = async (cmd: worker_command) => {
 	}
 	const currentProfile = CoNET_Data.profiles[CoNET_Data.profiles.findIndex(n => n.isPrimary)]
 	
-	if (!currentProfile.network?.entrys.length || !currentProfile.network?.recipients.length ) {
+	if (!currentProfile.network?.recipients.length ) {
 		cmd.err = 'NOT_READY'
 		return returnCommand (cmd)
 	}
-	const entryNode = getRamdomEntryNode (currentProfile)
+	const entryNode = await getRandomNode ()
 
 	if (!entryNode) {
 		cmd.err = 'NOT_READY'
@@ -1523,6 +1519,7 @@ const getProfile = async (cmd: worker_command) => {
 	} catch (ex) {
 		return logger (`regiestProfile POST to conet_DL_regiestProfile ${conet_DL_regiestProfile} get ERROR`)
 	}
+
 	if (CoNET_Data) {
 		CoNET_Data.clientPool.push (result)
 
@@ -2091,8 +2088,8 @@ const preProxyConnect = async (cmd: worker_command) => {
 
 const createKey = ( length: number ) => {
 
-	const eth = new CoNETModule.Web3Eth()
-	const acc = eth.accounts.wallet.create(length)
+	const eth = new CoNETModule.Web3Eth(CoNETNet)
+	const acc = eth.wallet.create(length)
 	return acc
 }
 
@@ -2151,8 +2148,12 @@ const encrypt_TestPasscode = async (cmd: worker_command) => {
 	}
 	cmd.data = [CoNET_Data]
 	returnCommand (cmd)
-	const url = `${self.location.origin}/conet-profile`
-	postToEndpoint(url, true, { profiles, activeNodes })
+	const currentProfile = gettPrimaryProfile()
+	if (currentProfile && currentProfile.network.recipients.length > 0) {
+		const url = `${self.location.origin}/conet-profile`
+		return postToEndpoint(url, true, { profile: currentProfile, activeNodes })
+	}
+	logger (`encrypt_TestPasscode have no currentProfile.network.recipients ERROR!`)
 }
 
 const createPlatformFirstProfile = async () => {
@@ -2267,7 +2268,7 @@ const encryptWorkerDoCommand = async ( e ) => {
 		// }
 
 		case 'getFaucet': {
-			return getFaucet (cmd)
+			return getFaucet (cmd, null)
 		}
 
 		case 'sendAsset': {

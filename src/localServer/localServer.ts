@@ -157,13 +157,15 @@ export const return404 = () => {
 
 
 class LocalServer {
-    private nodes: nodes_info[] = []
+    private logsPool: proxyLogs[] = []
+    private logsListeningPool: express.Response[] = []
     private localserver: Server
     private connect_peer_pool: any [] = []
 	private appsPath: string = join ( __dirname ) 
     constructor ( private PORT = 3000, private reactBuildFolder: string ) {
         this.initialize()
     }
+
     public _proxyServer: proxyServer|null = null
 
     public end () {
@@ -181,9 +183,10 @@ class LocalServer {
         return ws.send ( JSON.stringify ( sendData ))
     }
 
+
+
     private initialize = () => {
         const staticFolder = join ( this.appsPath, 'workers' )
-		const staticFolder1 = join ( this.appsPath, '../../../seguro-platform/build' )
         //const launcherFolder = join ( this.appsPath, '../launcher' )
 		//console.dir ({ staticFolder: staticFolder, launcherFolder: launcherFolder })
 
@@ -193,7 +196,6 @@ class LocalServer {
         app.use( cors ())
 		app.use ( express.static ( staticFolder ))
         //app.use ( express.static ( launcherFolder ))
-		app.use ( express.static ( staticFolder1 ))
         app.use ( express.json() )
 
         app.once ( 'error', ( err: any ) => {
@@ -324,6 +326,7 @@ class LocalServer {
             logger (`./sw.js`)
 
         })
+
         app.post ( '/postMessage', ( req: express.Request, res: express.Response ) => {
             const post_data: postData = req.body
             console.log ( inspect ( post_data, false, 3, true ))
@@ -333,15 +336,18 @@ class LocalServer {
         })
 
         app.post ( '/conet-profile', ( req: express.Request, res: express.Response ) => {
-            const data: { profiles, activeNodes } = req.body
+            const data: { profile, activeNodes } = req.body
             
             //logger (Colors.blue(`Local server get POST /profile req.body = `), inspect(data, false, 3, true))
-            if (data.activeNodes && data.profiles ) {
+            if (data.activeNodes.length > 0 && data.profile ) {
+                
+                
                 if (!this._proxyServer) {
-                    this._proxyServer = new proxyServer((this.PORT + 2).toString(), data.activeNodes, data.profiles, true)
+                    this._proxyServer = new proxyServer((this.PORT + 2).toString(), data.activeNodes, data.profile, true)
                 }
-                res.sendStatus(200) 
+                res.sendStatus(200)
             } else {
+                logger (`/conet-profile Error data.activeNodes [${data.activeNodes.length}] data.activeNodes.length > 0[${data.activeNodes.length > 0}]`, inspect(data.profile, false, 3, true))
                 res.sendStatus(404)
             }
             return res.end ()
@@ -352,6 +358,52 @@ class LocalServer {
             return request (url, _res => {
                 return _res.pipe ( res )
             })
+        })
+
+        app.post ('/proxyusage', (req, res) => {
+            res.json().end()
+            logger (inspect(req.body.data, false, 3, true))
+            this.logsPool.unshift(req.body.data)
+        })
+
+        app.post('/getProxyusage', (req, res) => {
+            const headerName=Colors.blue (`/getProxyusage`)
+            logger(headerName,  inspect(req.body.data, false, 3, true))
+            let roop:  NodeJS.Timeout
+            res.setHeader('Cache-Control', 'no-cache')
+            res.setHeader('Content-Type', 'text/event-stream')
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Connection', 'keep-alive')
+            res.flushHeaders() // flush the headers to establish SSE with client
+
+            let interValID = () => {
+
+                if (res.closed) {
+                    return logger ('')
+                }
+                if (this.logsPool.length <1) {
+
+                    this.logsPool.push(
+                        //@ts-ignore
+                        {data:`/getProxyusage ${req.body.data}`}
+                        )
+                }
+                
+                res.write(`${JSON.stringify({data: this.logsPool})}\r\n\r\n`, () => {
+                    this.logsPool = []
+                    return roop = setTimeout(() => {
+                        interValID()
+                    }, 1000)
+                })
+            }
+
+            res.on('close', () => {
+                console.log(`[${headerName}] client dropped me!`)
+                res.end()
+                clearTimeout(roop)
+            })
+            interValID()
+            
         })
 
         app.all ('*', (req, res) => {
