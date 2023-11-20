@@ -119,7 +119,8 @@ const initEncryptWorker = async () => {
 
 	responseChannel.postMessage(JSON.stringify(cmd))
 	
-    checkStorage ()
+    await checkStorage ()
+
 }
 
 
@@ -179,7 +180,7 @@ const sendCONET = async (node: nodes_info, amount: string, profile: profile) => 
 
 	const {eth} = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(network))
 	const sendObj = {
-		from     : '0x'+profile.keyID?.substring(2),
+		from     : '0x'+ profile.keyID?.substring(2),
 		to       : '0x'+ wallet.substring(2),
 		data     : ''
 	}
@@ -199,6 +200,7 @@ const sendCONET = async (node: nodes_info, amount: string, profile: profile) => 
 	}
 	sendObj['value'] = _amount.toString()
 	const createTransaction = await eth.accounts.signTransaction( sendObj,'0x'+profile.privateKeyArmor.substring(2))
+	
 	let receipt: CryptoAssetHistory
 	try {
 		receipt = await eth.sendSignedTransaction (createTransaction.rawTransaction )
@@ -230,7 +232,7 @@ const getNodeCollect = async (cmd: worker_command) => {
 
 	await getAllProfileBalance ()
 	const conetTokenBalance = profile.tokens.conet.balance
-	if (conetTokenBalance < 1) {
+	if (conetTokenBalance <= 0) {
 		cmd.err = 'FAILURE'
 		return returnUUIDChannel(cmd)
 	}
@@ -244,20 +246,15 @@ const getNodeCollect = async (cmd: worker_command) => {
 	if (uu.ge) k.push('DE')
 	let SaaSNodes: nodes_info[]
 	switch (k.length) {
-		case 1: {
-			SaaSNodes = getRandomRegionNode(filterNodes(_nodes, k[0]), 4)
-			break
-		}
+		
 		case 2: {
-			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 2), ...getRandomRegionNode(filterNodes(_nodes, k[1]), 2)]
+			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 1), ...getRandomRegionNode(filterNodes(_nodes, k[1]), 1)]
 			break
 		}
-		case 3: {
-			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 1), ...getRandomRegionNode(filterNodes(_nodes, k[1]), 1),...getRandomRegionNode(filterNodes(_nodes, k[2]), 2)]
+		default :
+		case 1: {
+			SaaSNodes = getRandomRegionNode(filterNodes(_nodes, k[0]), 2)
 			break
-		}
-		default : {
-			SaaSNodes = [...getRandomRegionNode(filterNodes(_nodes, k[0]), 1),...getRandomRegionNode(filterNodes(_nodes, k[1]), 1),...getRandomRegionNode(filterNodes(_nodes, k[2]), 1), ...getRandomRegionNode(filterNodes(_nodes, k[3]), 1)]
 		}
 	}
 	const balance = profile.tokens.conet.balance
@@ -268,7 +265,7 @@ const getNodeCollect = async (cmd: worker_command) => {
 
 	profile.network.recipients.unshift(...SaaSNodes)
 	cmd.data[0] = profile.network.recipients
-	const url = `${self.location.origin}/conet-profile`
+	const url = `http://localhost:3001/conet-profile`
 	postToEndpoint(url, true, { profile, activeNodes })
 	return storeProfile (cmd, () => {
 		return returnUUIDChannel (cmd)
@@ -297,8 +294,33 @@ const channelWorkerDoCommand = (async e => {
 		cmd.err = 'NOT_READY'
 		return returnCommand ( cmd )
 	}
+    processCmd(cmd)
 
-	switch (cmd.cmd) {
+})
+
+const responseLocalHost = async (cmd: worker_command) => {
+    const url = `http://localhost:3001/connectingResponse`
+    const connect = await fetch (url, {
+        method: "POST",
+        headers: {
+            Accept: "text/event-stream",
+            "Content-Type": 'application/json;charset=UTF-8'
+        },
+        body: JSON.stringify({data: cmd}),
+        cache: 'no-store',
+        referrerPolicy: 'no-referrer'
+    })
+    .then (value => value.json())
+    .then(data=> {
+        logger(`responseLocalHost =========>`, data)
+    })
+    .catch (ex=> {
+        logger (`responseLocalHost Error`, ex)
+    })
+}
+
+const processCmd = async (cmd: worker_command) => {
+    switch (cmd.cmd) {
 		case 'urlProxy': {
 			return preProxyConnect (cmd)
 		}
@@ -343,6 +365,7 @@ const channelWorkerDoCommand = (async e => {
 			logger (`Worker encryptWorkerDoCommand got getWorkerClientID ClientIDworker = [${ClientIDworker}]`)
 			return responseChannel.postMessage(JSON.stringify(cmd))
 		}
+		//****************************************************************************************** */
 
 		case 'getFaucet' : {
 			cmd.data[0] = gettPrimaryProfile ()
@@ -356,9 +379,14 @@ const channelWorkerDoCommand = (async e => {
 				if (cmd.err) {
 					return returnUUIDChannel (cmd)
 				}
+
 				return getPrimaryBalance (cmd)
 			})
 		}
+
+        case 'getContainer': {
+            return getContainer(cmd)
+        }
 
 		case 'setRegion': {
 			
@@ -373,6 +401,96 @@ const channelWorkerDoCommand = (async e => {
 			return getPrimaryBalance (cmd)
 		}
 
+		case 'encrypt_createPasscode': {
+			if ( !cmd.data || cmd.data.length < 2) {
+                cmd.err = 'INVALID_DATA'
+                return returnUUIDChannel ( cmd )
+            }
+
+            delete cmd.err
+			const password = cmd.data[0]
+            await createNumberPasscode (password)
+			await createPlatformFirstProfile ()
+			if (CoNET_Data) {
+				CoNET_Data.preferences = {
+					langurge: cmd.data[1]
+				}
+			}
+			await storage_StoreContainerData ()
+			const data: encrypt_keys_object = {
+				preferences: {
+					preferences: {
+						language: cmd.data[1]
+					}
+				},
+				passcode: {
+					status: 'UNLOCKED'
+				},
+				profiles: CoNET_Data?.profiles,
+				isReady: true,
+				clientPool: []
+			}
+		
+			cmd.data = [data]
+			returnUUIDChannel (cmd)
+		}
+
+        case 'encrypt_TestPasscode': {
+
+            if ( !cmd.data?.length || !passObj ) {
+                cmd.err = 'INVALID_DATA'
+                return responseLocalHost (cmd)
+            }
+
+            passObj.password = cmd.data[0]
+            await decodePasscode ()
+            try {
+                await makeContainerPGPObj()
+                await decryptCoNET_Data_WithContainerKey ()
+            } catch (ex) {
+                logger (`encrypt_TestPasscode get password error!`)
+                cmd.err = 'FAILURE'
+                return responseLocalHost (cmd)
+            }
+            delete cmd.err
+            if (!CoNET_Data) {
+                logger (`encrypt_TestPasscode Error: Empty CoNET_Data!`)
+                cmd.err = 'FAILURE'
+                return responseLocalHost (cmd)
+            }
+            CoNET_Data.passcode = {
+                status: 'UNLOCKED'
+            }
+        
+            const profiles = CoNET_Data.profiles
+            if ( profiles ) {
+                for ( let i = 0; i < profiles.length; i++ ) {
+                    const key = profiles[i].keyID
+                    if (key) {
+                        profiles[i].tokens.conet.balance = await getCONETBalance (key)
+                        // profiles[i].tokens.usdc.balance = await getUSDCBalance (key)
+                    }	
+                    
+                }
+            }
+            cmd.data = [CoNET_Data]
+            responseLocalHost (cmd)
+
+            const profile = gettPrimaryProfile()
+            if (activeNodes) {
+                const url = `http://localhost:3001/conet-profile`
+                await postToEndpoint(url, true, { profile, activeNodes })
+                // fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {
+                //     logger (`fetchProxyData GOT DATA FROM locathost `, data)
+                // })
+            }
+            return
+        }
+
+        case 'SaaSRegister': {
+            return logger (`processCmd on SaaSRegister`)
+        }
+
 	
 		default: {
 			cmd.err = 'INVALID_COMMAND'
@@ -381,8 +499,7 @@ const channelWorkerDoCommand = (async e => {
 			return console.log (`channelWorkerDoCommand unknow command!`, cmd)
 		}
 	}
-
-})
+}
 
 /**
  * 		
@@ -390,3 +507,151 @@ const channelWorkerDoCommand = (async e => {
 
 
 initEncryptWorker()
+
+
+const fetchProxyData = async (url: string, callBack: (data: any) => void) => {
+
+    const xhttp = new XMLHttpRequest()
+    let last_response_len = 0
+
+	const listeningPogress = () => {
+        const req = xhttp.response
+        clearTimeout(timeCheck)
+        if (xhttp.status !== 200) {
+            logger (`fetchProxyData get status [${xhttp.status}] !== 200 STOP connecting!`)
+            return abort(true)
+        }
+		const responseText = req.substr(last_response_len)
+        last_response_len = req.length
+        responseText.split('\r\n\r\n')
+            .filter((n: string) => n.length)
+            .forEach((n: any, index: number) => {
+                let obj
+                try {
+                    obj = JSON.parse(n)
+                } catch(ex) {
+                    return logger(`fetchProxyData responseText JSON parse Error typeof [${typeof n}]`, n)
+                }
+                logger (`fetchProxyData Got Stream data typeof data[${typeof obj}][${obj.length}]`, n)
+                return callBack (obj)
+            })
+	}
+
+    const abort = (reconnect: boolean) => {
+        // xhttp.removeEventListener('error', listeningError)
+        // xhttp.removeEventListener('progress', listeningPogress)
+        if (reconnect) {
+            return setTimeout(() => {
+                return fetchProxyData(url, callBack)
+            }, 5000)
+            
+        }
+        logger(`fetchProxyData STOP!`)
+    }
+
+	const listeningError = (error) => {
+		logger (`fetchProxyData connnection on Error`, error)
+        abort(true)
+	}
+
+	const timeCheck = setTimeout(function () {     /* vs. a.timeout */
+        if (xhttp.readyState < 3) {
+            logger (`fetchProxyData setTimeout readyState [${xhttp.readyState}] restart!`)
+            xhttp.abort()
+            return abort(true)
+        }
+    }, 5000)
+	
+	xhttp.addEventListener('error', listeningError)
+	xhttp.addEventListener('progress', listeningPogress)
+	
+    xhttp.open('POST', url, true)
+    xhttp.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
+    xhttp.setRequestHeader('Accept', 'text/event-stream')
+    xhttp.send()
+
+
+    // const connect = await fetch (url, {
+    //     method: "POST",
+    //     headers: {
+    //         Accept: "text/event-stream",
+    //         "Content-Type": 'application/json;charset=UTF-8'
+    //     },
+    //     body: JSON.stringify({data: node.ip_addr}),
+    //     cache: 'no-store',
+    //     referrerPolicy: 'no-referrer'
+    // })
+    // .then (value => value.json())
+    // .then(data=> {
+    //     logger(`fetchData =========>`)
+    //     logger (data)
+    // })
+    // logger (`fetchProxyData [${url}]`)
+}
+
+const rework = () => {
+	const hours = 0
+	const staking = 900
+	const returnRate = 0.5
+	const totalMins = 43200
+	const hoursRate = returnRate / (totalMins * 12)
+
+}
+
+const returnNullContainerUUIDChannel = async (cmd: worker_command) => {
+    delete cmd.err
+    initNullSystemInitialization()
+    cmd.data = ['NoContainer']
+    returnUUIDChannel ( cmd )
+	await deleteExistDB()
+	database = null
+}
+
+const getContainer = async (cmd: worker_command) => {
+    database = new PouchDB( databaseName, { auto_compaction: true })
+    let doc
+	let initData: CoNETIndexDBInit
+    try {
+		doc = await database.get ('init', {latest: true})
+		initData = JSON.parse ( buffer.Buffer.from (doc.title,'base64').toString ())
+	} catch (ex) {
+        logger (`checkStorage have no CoNET data in IndexDB, INIT CoNET data`)
+		return returnNullContainerUUIDChannel (cmd)
+	}
+    if ( !initData.container || !initData.id ) {
+		logger (`checkStorage have not USER profile!`)
+		return returnNullContainerUUIDChannel (cmd)
+	}
+
+    containerKeyObj = {
+		privateKeyArmor: initData.container.privateKeyArmor,
+		publicKeyArmor: initData.container.publicKeyArmor
+	}
+
+	passObj = initData.id
+	preferences = initData.preferences
+	systemInitialization_UUID = initData.uuid
+	doc = await getUUIDFragments (systemInitialization_UUID)
+
+    CoNET_Data = {
+		isReady: false,
+		encryptedString: doc.title,
+		clientPool: []
+	}
+
+	const data: systemInitialization = {
+		preferences: preferences,
+		passcode: {
+			status: 'LOCKED'
+		},
+	}
+	cmd.data = ['ContainerLocked']
+	returnUUIDChannel (cmd)
+	if (!activeNodes?.length ) {
+		activeNodes = await _getSINodes ('CUSTOMER_REVIEW', 'USA')
+	}
+    //          already init database
+    // fetchProxyData(`http://localhost:3001/connecting`, data => {
+    //     processCmd (data)
+    // })
+}

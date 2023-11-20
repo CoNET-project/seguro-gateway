@@ -380,7 +380,7 @@ export class proxyServer {
 		this.server.maxConnections = 65536
 
 		this.server.listen ( this.proxyPort, () => {
-			return logger ( Colors.blue(`Proxy SERVER success on port : [${ this.proxyPort }]`))
+			return logger ( Colors.blue(`Proxy SERVER success on port : [${ this.proxyPort }] active nodes =[${this.nodes.length}] Saas nodes = [${this.currentProfile.network.recipients.length}]`))
 		})
 	}
 
@@ -399,17 +399,16 @@ export class proxyServer {
 		ConnectToProxyNode (cmd, upChannel_SaaS_node, this.nodes, socket, this.currentProfile, uuuu)
 	}
     
-	constructor ( 
+	constructor (
 		
 		public proxyPort: string,						//			Proxy server listening port number
 		private nodes: nodes_info[],	 				//			gateway nodes information
 		private currentProfile: profile,
-		public debug = false ) 
+		public debug = false )
 		
 		{
 			logger(inspect(this.currentProfile.network.recipients, false, 1, true))
 			this.startLocalProxy()
 		}
-
 }
 

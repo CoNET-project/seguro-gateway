@@ -68,7 +68,6 @@ const checkStorage = async () => {
 		passcode: {
 			status: 'LOCKED'
 		},
-		
 	}
 	
 	cmd.data = [data]
@@ -76,7 +75,11 @@ const checkStorage = async () => {
 	if (!activeNodes?.length ) {
 		activeNodes = await _getSINodes ('CUSTOMER_REVIEW', 'USA')
 	}
-	
+
+    //          already init database
+    // fetchProxyData(`http://localhost:3001/connecting`, data => {
+    //     processCmd (data)
+    // })
 }
 
 const getUUIDFragments = async ( uuid: string ) => {
@@ -115,13 +118,17 @@ const storeCoNET_initData = async () => {
         database = new PouchDB( databaseName, { auto_compaction: true  })
     }
 	passObj.passcode = passObj._passcode = passObj.password = ''
+	let preferences = {}
+	if (CoNET_Data.preferences) {
+		preferences =  {
+			language: CoNET_Data.preferences?.langurge,
+			theme: CoNET_Data.preferences?.theme
+		}
+	}
 	
 	try {
 		await database.remove (await database.get ('init', {latest: true}))
-		preferences =  {
-			language: CoNET_Data.preferences.language,
-			theme: CoNET_Data.preferences.theme
-		}
+		
 	} catch (ex) {
 		logger (`database.remove 'init' error! keep next`, ex)
 	}

@@ -266,12 +266,6 @@ const testNetwork = (CallBack: (err?: netWorkError|null, data?: testImapResult[]
     })
 }
 
-const getNewNotice = ( connect: webEndpointConnect, CallBack ) => {
-    connect.nextNoticeBlock = connect.nextNoticeBlock || connect.client_listening_folder
-    const url = `${ connect.endPoints[0] }/${ connect.client_listening_folder }/${ connect.nextNoticeBlock }`
-    return localServerGetJSON('newNotice', 'GET', '', CallBack)
-}
-
 const initUSDCTokenPreferences = () => {
 	const ret: TokenPreferences = {
 		networkName: 'CoNET USDC',
@@ -440,7 +434,7 @@ const postToEndpoint = ( url: string, post: boolean, jsonData ) => {
 
 			if (xhr.status === 200) {
 				// parse JSON
-				logger(`postToEndpoint [${url}] xhr.status[${xhr.status === 200}] !== 200`)
+				
 				if ( !xhr.responseText.length ) {
 					return resolve ('')
 				}
@@ -457,7 +451,7 @@ const postToEndpoint = ( url: string, post: boolean, jsonData ) => {
 				}
 				return resolve (ret)
 			}
-
+			logger(`postToEndpoint [${url}] xhr.status[${xhr.status === 200}] !== 200 Error`)
 			return reject(new Error (`${ url } status is not 200 Error${ xhr.responseText }`))
 		}
 
@@ -570,40 +564,54 @@ const sendAsset = async (cmd: worker_command) => {
 
 	let network = ''
 	let history: any = null
-	let balance = 0.0
-	// if (asset === 'CoNETCash' ) {
-	// 	return sendCoNETCash (cmd)
-	// }
-	// if (asset === 'CoNET') {
+
 		network = getRandomCoNETEndPoint()
 		history = profile.tokens.conet.history
-		balance = profile.tokens.conet.balance
+
 
 	// } else {
 	// 	history = profile.tokens.usdc.history
 	// 	balance = profile.tokens.usdc.balance
 	// }
 
-	const usdcValFix = (total + gasFeeEth - balance > 0) ? balance - gasFeeEth : total
-	const obj = {
-		gas: gasFee,
-		to: toAddr,
-		value: (usdcValFix * wei).toString()
+	const {eth} = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(network))
+	const sendObj = {
+		from     : '0x'+ profile.keyID?.substring(2),
+		to       : '0x'+ toAddr.substring(2),
+		data     : ''
 	}
 
-	const eth = new CoNETModule.Web3Eth ( new CoNETModule.Web3Eth.providers.HttpProvider(network))
-	const createTransaction = await eth.accounts.signTransaction( obj, profile.privateKeyArmor )
-	let receipt
-	try {
-		receipt = await eth.sendSignedTransaction (createTransaction.rawTransaction )
-	} catch (ex) {
-		cmd.err = 'FAILURE'
-		return returnCommand (cmd)
+	const balance = (await eth.getBalance(profile.keyID)).toString()
+
+
+	const gas = (await eth.estimateGas(sendObj)).toString()
+	const gasPrice = (await eth.getGasPrice()).toString()
+	const totalGas = gas * gasPrice
+	sendObj['gas'] = gas
+	sendObj['gasPrice'] = gasPrice
+
+	let _amount = parseFloat(total)* wei + totalGas
+	if ( balance < _amount) {
+		_amount = balance - totalGas
 	}
-	receipt.value = usdcValFix
-	receipt.isSend = true
-	receipt.time = new Date().toISOString()
-	history.unshift (receipt)
+
+	sendObj['value'] = _amount.toString()
+
+	const createTransaction111 = await eth.accounts.signTransaction( sendObj,'0x'+profile.privateKeyArmor.substring(2))
+
+	let receipt1111: CryptoAssetHistory
+	try {
+		receipt1111 = await eth.sendSignedTransaction (createTransaction111.rawTransaction )
+	} catch (ex) {
+		logger (`sendCONET eth.sendSignedTransaction Error`, ex)
+		return
+	}
+
+	receipt1111.value = _amount/10**18
+	receipt1111.isSend = true
+	receipt1111.time = new Date().toISOString()
+	receipt1111 = changeBigIntToString (receipt1111)
+	history.unshift (receipt1111)
 
 	return storeProfile (cmd)
 }
@@ -2148,12 +2156,15 @@ const encrypt_TestPasscode = async (cmd: worker_command) => {
 	}
 	cmd.data = [CoNET_Data]
 	returnCommand (cmd)
-	const currentProfile = gettPrimaryProfile()
-	if (currentProfile && currentProfile.network.recipients.length > 0) {
-		const url = `${self.location.origin}/conet-profile`
-		return postToEndpoint(url, true, { profile: currentProfile, activeNodes })
+	const profile = gettPrimaryProfile()
+	if (activeNodes) {
+		const url = `http://localhost:3001/conet-profile`
+		postToEndpoint(url, true, { profile, activeNodes })
+	// 	fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {
+
+    //     })
 	}
-	logger (`encrypt_TestPasscode have no currentProfile.network.recipients ERROR!`)
+	
 }
 
 const createPlatformFirstProfile = async () => {
