@@ -4,6 +4,7 @@ import {getRandomValues} from 'node:crypto'
 import { Transform, pipeline, Writable} from 'node:stream'
 import { inspect } from 'node:util'
 import * as Socks from './socks'
+import { request as requestHttps } from 'node:https'
 import HttpProxyHeader from './httpProxy'
 import {request as requestHttp} from 'node:http'
 import {logger, hexDebug} from './logger'
@@ -12,26 +13,38 @@ import type {RequestOptions} from 'node:https'
 import * as openpgp from 'openpgp'
 import { TransformCallback } from 'stream'
 
-const getRandomSaaSNode = (saasNodes: nodes_info[]) => {
+
+
+const getRandomSaaSNode = (saasNodes: nodes_info[], allNodes: nodes_info[]) => {
 	const ramdom = Math.round((saasNodes.length - 1 ) * Math.random())
-	const ret = saasNodes[ramdom]
-	return ret
-}
-const getRandomNode = (activeNodes: nodes_info[], saasNode: nodes_info|null) => {
+	const _ret = saasNodes[ramdom]
+	const index = allNodes.findIndex(n => n.ip_addr === _ret.ip_addr)
 
-	
-	// return getNodeByIpaddress ('108.175.5.112', activeNodes)
-	const ramdom = Math.round((activeNodes.length - 1 ) * Math.random())
-	
-	logger (Colors.grey(`getRandomNode ramdom[${ramdom}]`))
-	const ret = activeNodes[ramdom]
-	if (saasNode && ret.ip_addr === saasNode.ip_addr) {
-		return getRandomNode (activeNodes, saasNode)
+	if (index === -1 ) {
+		saasNodes = saasNodes.filter(n => n.ip_addr !== _ret.ip_addr)
+		if (saasNodes.length < 1)  {
+			return null
+		}
+		return getRandomSaaSNode (saasNodes, allNodes)
 	}
+	return allNodes[index]
+}
+
+const getRandomNode = (activeNodes: nodes_info[], saasNode: nodes_info) => {
+
+	const nodes = activeNodes.filter(n => n.ip_addr!== saasNode.ip_addr)
+	// return getNodeByIpaddress ('108.175.5.112', activeNodes)
+	const ramdom = Math.round((nodes.length - 1 ) * Math.random())
+	
+	
+	const ret = nodes[ramdom]
+	logger (Colors.grey(`getRandomNode nodes.length= [${nodes.length}] ramdom = [${ramdom}]`))
+	logger (Colors.grey(`getRandomNode ${ret.ip_addr} saasNode ${saasNode?.ip_addr}`))
 	return ret
 }
-const CoNET_SI_Network_Domain = 'openpgp.online'
 
+const CoNET_SI_Network_Domain = 'openpgp.online'
+const conet_DL_getSINodesPath = `/api/conet-si-list`
 const getPac = ( hostIp: string, port: string, http: boolean, sock5: boolean ) => {
 
 	const FindProxyForURL = `function FindProxyForURL ( url, host )
@@ -287,6 +300,7 @@ const postUDPMessage = async (SaaS_node: nodes_info, nodes: nodes_info[], curren
 			'Connection': 'close',
 		}
 	}
+
 	const req = requestHttp(option, res => {
 		if (res.statusCode !==200) {
 			return logger (Colors.red(`postUDPMessage [${ uuuu.uuid }] [${id}]  STEP [${uuuu.order }] chunk length [${_sendData.length}] res.statusCode [${res.statusCode}] !== 200 ERROR`))
@@ -300,6 +314,54 @@ const postUDPMessage = async (SaaS_node: nodes_info, nodes: nodes_info[], curren
 		logger (Colors.red(`postUDPMessage [${ uuuu.uuid }] [${id}] STEP [${uuuu.order }] chunk length [${_sendData.length}] host on Error!`), err)
 	})
 	req.end(JSON.stringify({data:_sendData}))
+}
+
+const getJSON_DataFromPOST = (domain: string, path: string) => {
+	const option: RequestOptions = {
+		host: domain,
+		method: 'POST',
+		port: 443,
+		path: path,
+		protocol: 'https:',
+		headers: {
+			'Content-Type': 'application/json;charset=UTF-8',
+			'Connection': 'close',
+		}
+	}
+	
+	return new Promise(( resolve)  => {
+		const req = requestHttps(option, res => {
+			if (res.statusCode!== 200) {
+				resolve (null)
+				return logger (Colors.red(`getJSON_DataFromPOST res got response [${res.statusCode}] !== 200 `))
+			}
+
+			let data=''
+			res.on('data', _data => {
+				data += _data.toString()
+			})
+
+			res.once ('end', () => {
+				let ret
+				try{
+					ret = JSON.parse(data)
+				} catch (ex) {
+					logger (Colors.red(`getJSON_DataFromPOST JSON.parse(data) ERROR`), data)
+					return resolve(null)
+				}
+				return resolve(ret)
+			})
+			
+		})
+
+		req.on('error', err => {
+			logger (Colors.red(`getJSON_DataFromPOST server on Error `), err)
+		})
+		req.end()
+	})
+
+	
+	
 }
 
 export class proxyServer {
@@ -317,11 +379,17 @@ export class proxyServer {
 	public checkAgainTimeOut = 1000 * 60 * 5
 	public connectHostTimeOut = 1000 * 5
 	public useGatWay = true
+	public nodes
 	public clientSockets: Set<Net.Socket> = new Set()
 
-	private startLocalProxy () {
+	private startLocalProxy = async () => {
+
+		this.nodes = await getJSON_DataFromPOST(CoNET_SI_Network_Domain, conet_DL_getSINodesPath)
+		if (!this._nodes|| !this._nodes.length) {
+			logger (Colors.red(`startLocalProxy Error! Have no SI nodes Infomation!`))
+		}
+		logger(inspect(this._nodes))
 		let socks
-		
 		this.server = Net.createServer ( socket => {
 			const ip = socket.remoteAddress
 			this.clientSockets.add (socket)
@@ -385,7 +453,7 @@ export class proxyServer {
 	}
 
 	public requestGetWay = async (requestObj: requestObj, uuuu : VE_IPptpStream, userAgent:string, socket: Net.Socket ) => {
-		const upChannel_SaaS_node  = getRandomSaaSNode(this.currentProfile.network.recipients)	//getNodeByIpaddress('74.208.55.241', this.nodes)
+		const upChannel_SaaS_node  = getRandomSaaSNode(this.currentProfile.network.recipients, this.nodes)	//getNodeByIpaddress('74.208.55.241', this.nodes)
 		
 		if (!upChannel_SaaS_node ) {
 			return logger (Colors.red(`proxyServer makeUpChannel upChannel_SaaS_node Null Error!`))
@@ -402,7 +470,7 @@ export class proxyServer {
 	constructor (
 		
 		public proxyPort: string,						//			Proxy server listening port number
-		private nodes: nodes_info[],	 				//			gateway nodes information
+		private _nodes: nodes_info[],	 				//			gateway nodes information
 		private currentProfile: profile,
 		public debug = false )
 		

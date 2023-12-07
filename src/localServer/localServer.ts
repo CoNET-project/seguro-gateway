@@ -158,7 +158,7 @@ export const return404 = () => {
 
 class LocalServer {
     private logsPool: proxyLogs[] = []
-    private ver = '0.0.6'
+    private ver = '0.0.9'
     private loginListening: express.Response|null = null
     private localserver: Server
     private connect_peer_pool: any [] = []

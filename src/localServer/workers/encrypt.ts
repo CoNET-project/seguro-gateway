@@ -389,7 +389,6 @@ const processCmd = async (cmd: worker_command) => {
         }
 
 		case 'setRegion': {
-			
 			return getNodeCollect(cmd)
 		}
 
@@ -473,6 +472,7 @@ const processCmd = async (cmd: worker_command) => {
                     
                 }
             }
+
             cmd.data = [CoNET_Data]
             responseLocalHost (cmd)
 
@@ -490,6 +490,29 @@ const processCmd = async (cmd: worker_command) => {
         case 'SaaSRegister': {
             return logger (`processCmd on SaaSRegister`)
         }
+
+		case 'encrypt_deletePasscode': {
+            
+			cmd.data = [initNullSystemInitialization()]
+			returnUUIDChannel (cmd)
+			await deleteExistDB()
+			return database = null
+        }
+
+		case 'startProxy': {
+			const profile = gettPrimaryProfile()
+			if (profile && activeNodes) {
+				
+				const url = `http://localhost:3001/conet-profile`
+                await postToEndpoint(url, true, { profile, activeNodes })
+                // fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {
+                //     logger (`fetchProxyData GOT DATA FROM locathost `, data)
+                // })
+				return returnUUIDChannel(cmd)
+			}
+			cmd.err = 'FAILURE'
+			return returnUUIDChannel(cmd)
+		}
 
 	
 		default: {
@@ -649,6 +672,7 @@ const getContainer = async (cmd: worker_command) => {
 	returnUUIDChannel (cmd)
 	if (!activeNodes?.length ) {
 		activeNodes = await _getSINodes ('CUSTOMER_REVIEW', 'USA')
+		logger (activeNodes)
 	}
     //          already init database
     // fetchProxyData(`http://localhost:3001/connecting`, data => {
