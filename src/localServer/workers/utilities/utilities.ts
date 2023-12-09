@@ -2157,7 +2157,7 @@ const encrypt_TestPasscode = async (cmd: worker_command) => {
 	cmd.data = [CoNET_Data]
 	returnCommand (cmd)
 	const profile = gettPrimaryProfile()
-	if (activeNodes) {
+	if (activeNodes && activeNodes.length > 0) {
 		const url = `http://localhost:3001/conet-profile`
 		postToEndpoint(url, true, { profile, activeNodes })
 	// 	fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {

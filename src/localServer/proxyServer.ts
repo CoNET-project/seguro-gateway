@@ -16,6 +16,10 @@ import { TransformCallback } from 'stream'
 
 
 const getRandomSaaSNode = (saasNodes: nodes_info[], allNodes: nodes_info[]) => {
+	if (!saasNodes.length || !allNodes.length) {
+		return null
+	}
+	logger (`getRandomSaaSNode saasNodes length [${saasNodes.length}] allNodes length [${allNodes}]`)
 	const ramdom = Math.round((saasNodes.length - 1 ) * Math.random())
 	const _ret = saasNodes[ramdom]
 	const index = allNodes.findIndex(n => n.ip_addr === _ret.ip_addr)

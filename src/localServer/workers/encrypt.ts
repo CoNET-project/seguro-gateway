@@ -477,7 +477,7 @@ const processCmd = async (cmd: worker_command) => {
             responseLocalHost (cmd)
 
             const profile = gettPrimaryProfile()
-            if (activeNodes) {
+            if (activeNodes && activeNodes.length > 0) {
                 const url = `http://localhost:3001/conet-profile`
                 await postToEndpoint(url, true, { profile, activeNodes })
                 // fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {
@@ -501,7 +501,7 @@ const processCmd = async (cmd: worker_command) => {
 
 		case 'startProxy': {
 			const profile = gettPrimaryProfile()
-			if (profile && activeNodes) {
+			if (profile && activeNodes && activeNodes.length > 0) {
 				
 				const url = `http://localhost:3001/conet-profile`
                 await postToEndpoint(url, true, { profile, activeNodes })
@@ -512,6 +512,15 @@ const processCmd = async (cmd: worker_command) => {
 			}
 			cmd.err = 'FAILURE'
 			return returnUUIDChannel(cmd)
+		}
+
+		case 'ipaddress': {
+			
+			const url = `http://localhost:3001/ipaddress`
+			cmd.data = [await postToEndpoint(url, false, '')]
+			
+			return returnUUIDChannel(cmd)
+			
 		}
 
 	

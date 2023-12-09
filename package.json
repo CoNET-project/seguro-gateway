@@ -1,6 +1,6 @@
 {
     "name": "@conet.project/conet-proxy",
-    "version": "0.0.9",
+    "version": "0.0.12",
     "license": "UNLICENSED",
     "files": [
         "./build"
@@ -24,7 +24,8 @@
         "fs-extra": "^11.2.0",
         "uuid": "^9.0.1",
         "yargs": "^17.7.2",
-        "hexdump-nodejs":"^0.1.0"
+        "hexdump-nodejs":"^0.1.0",
+		"ip": "^1.1.8"
     },
     "devDependencies": {
         "@types/async": "^3.2.24",

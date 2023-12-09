@@ -8,6 +8,11 @@ import { inspect } from 'node:util'
 import { v4 } from 'uuid'
 import {proxyServer} from './proxyServer'
 import {logger} from './logger'
+import Ip from "ip"
+
+
+const ver = '0.0.12'
+
 
 const CoNET_SI_Network_Domain = 'openpgp.online'
 const conet_DL_getSINodes = `https://${ CoNET_SI_Network_Domain }/api/conet-si-list`
@@ -158,7 +163,7 @@ export const return404 = () => {
 
 class LocalServer {
     private logsPool: proxyLogs[] = []
-    private ver = '0.0.9'
+
     private loginListening: express.Response|null = null
     private localserver: Server
     private connect_peer_pool: any [] = []
@@ -348,8 +353,12 @@ class LocalServer {
                 logger (`/conet-profile Error data.activeNodes [${data.activeNodes.length}] data.activeNodes.length > 0[${data.activeNodes.length > 0}]`, inspect(data.profile, false, 3, true))
                 res.sendStatus(404)
             }
-            return res.end ()
+            return res.end()
         })
+
+		app.get('/ipaddress', (req, res) => {
+			return res.json ({ip:Ip.address()}).end()
+		})
 
         app.post ('/proxyusage', (req, res) => {
             res.json().end()
@@ -487,7 +496,8 @@ class LocalServer {
         })
 
         app.get('/ver', (req, res) =>{
-            res.json({ver:this.ver})
+			logger (`APP get ${req.url}`)
+            res.json({ver})
         })
 
         app.post('/loginRequest', (req, res) =>{
@@ -526,7 +536,7 @@ class LocalServer {
         })
 
         app.all ('*', (req, res) => {
-			logger (Colors.red(`Local web server got unknow request URL Error! [${ splitIpAddr (req.ip) }] => ${ req.method }[http://${ req.headers.host }${ req.url }]`))
+			logger (Colors.red(`Local web server got unknow request URL Error! [${ splitIpAddr (req.ip) }] => ${ req.method } url =[${ req.url }]`))
 			return res.status(404).end (return404 ())
 		})
 

@@ -162,7 +162,7 @@ declare type WorkerCommand = 'READY'|'getRegiestNodes'|
 	'getFaucet'|'isAddress'|'syncAsset'|'sendAsset'|'getUSDCPrice'|'buyUSDC'|'getWorkerClientID'|
 	'mintCoNETCash'|'getSINodes'|'getRecipientCoNETCashAddress'|'getUserProfile'|
 	'sendMessage'|'incomeData'|'WORKER_MESSAGE'|'getCONETBalance'|'startProxy'|
-    'SaaSRegister'|'getContainer'
+    'SaaSRegister'|'getContainer'|'ipaddress'
 	//		from service worker
 	'urlProxy'|'saveDomain'|'getDomain'|'getWorkerClientID'
 
