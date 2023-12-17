@@ -76,7 +76,7 @@ const postToEndpointJSON = ( url: string, jsonData: string ) => {
 	
 }
 
-export const splitIpAddr = (ipaddress: string ) => {
+export const splitIpAddr = (ipaddress: string | undefined) => {
 	if (!ipaddress?.length) {
 		logger (Colors.red(`splitIpAddr ipaddress have no ipaddress?.length`), inspect( ipaddress, false, 3, true ))
 		return ''
