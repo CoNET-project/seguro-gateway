@@ -11,11 +11,12 @@ import {logger} from './logger'
 import Ip from "ip"
 
 
+
 const ver = '0.0.12'
 
 
 const CoNET_SI_Network_Domain = 'openpgp.online'
-const conet_DL_getSINodes = `https://${ CoNET_SI_Network_Domain }/api/conet-si-list`
+const conet_DL_getSINodes = `https://${ CoNET_SI_Network_Domain }:4001/api/conet-si-list`
 
 const postToEndpointJSON = ( url: string, jsonData: string ) => {
 	return new Promise ((resolve, reject) => {
@@ -23,11 +24,12 @@ const postToEndpointJSON = ( url: string, jsonData: string ) => {
         const Url = new URL(url)
 
         const option: RequestOptions = {
-            port: 443,
+            port: Url.port,
             hostname: Url.hostname,
             host: Url.host,
             path: Url.pathname,
             method: 'POST',
+			protocol: Url.protocol,
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': jsonData.length
@@ -344,8 +346,8 @@ class LocalServer {
             //logger (Colors.blue(`Local server get POST /profile req.body = `), inspect(data, false, 3, true))
             if (data.activeNodes.length > 0 && data.profile ) {
                 
-                
                 if (!this._proxyServer) {
+					logger (`Start new proxyServer data.profile [${data.profile}] data.activeNodes [${data.activeNodes}]`)
                     this._proxyServer = new proxyServer((this.PORT + 2).toString(), data.activeNodes, data.profile, true)
                 }
                 res.sendStatus(200)

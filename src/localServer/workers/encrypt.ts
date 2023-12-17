@@ -5,21 +5,20 @@ let workerReady = false
 let CoNET_Data: encrypt_keys_object | null = null
 let containerKeyObj: keyPair|null = null
 let preferences: any = null
-const CoNET_SI_Network_Domain = 'https://openpgp.online'
+const CoNET_SI_Network_Domain = 'https://openpgp.online:4001'
 const conet_DL_endpoint = `${ CoNET_SI_Network_Domain }/api/conet-faucet`
 const conet_DL_getUSDCPrice_Endpoint = `${ CoNET_SI_Network_Domain }/api/conet-price`
 const conet_DL_getSINodes = `${ CoNET_SI_Network_Domain }/api/conet-si-list`
 const conet_DL_authorizeCoNETCashEndpoint = `${ CoNET_SI_Network_Domain }/api/authorizeCoNETCash`
 const conet_DL_regiestProfile = `${ CoNET_SI_Network_Domain }/api/regiestProfileRoute`
 const conet_DL_publishGPGKeyArmored = `${ CoNET_SI_Network_Domain }/api/publishGPGKeyArmored`
+const conet_DL_Liveness = `${ CoNET_SI_Network_Domain }/api/livenessListening`
 const gasFee = 30000
 const wei = 10**18
 const gwei = 10**9
 const denominator = 1000000000000000000
 const gasFeeEth = 0.000526
 const GasToEth = 0.00000001
-const USDC_exchange_Addr = '0xD493391c2a2AafEd135A9f6164C0Dcfa9C68F1ee'
-const buyUSDCEndpoint = `${ CoNET_SI_Network_Domain }/api/exchange_conet_usdc`
 const mintCoNETCashEndpoint = `${ CoNET_SI_Network_Domain }/api/mint_conetcash`
 const openSourceEndpoint = 'https://s3.us-east-1.wasabisys.com/conet-mvp/router/'
 
@@ -27,7 +26,7 @@ const responseChannel = new BroadcastChannel('toServiceWroker')
 const databaseName = 'CoNET'
 const channel = new BroadcastChannel('toMainWroker')
 let activeNodes: nodes_info[]|null= null
-
+let Liveness: XMLHttpRequest|null = null
 const CoNETModule: CoNET_Module = {
 	EthCrypto: null,
 	Web3Providers:  null,
@@ -103,7 +102,6 @@ const initEncryptWorker = async () => {
     self.importScripts ( baseUrl + 'jszip.min.js' )
     self.importScripts ( baseUrl + 'utilities.js' )
 	self.importScripts ( baseUrl + 'web3.js' )
-
     self.importScripts ( baseUrl + 'generatePassword.js' )
     self.importScripts ( baseUrl + 'storage.js' )
     self.importScripts ( baseUrl + 'seguroSetup.js' )
@@ -232,7 +230,7 @@ const getNodeCollect = async (cmd: worker_command) => {
 
 	await getAllProfileBalance ()
 	const conetTokenBalance = profile.tokens.conet.balance
-	if (conetTokenBalance <= 0) {
+	if (conetTokenBalance <= '0') {
 		cmd.err = 'FAILURE'
 		return returnUUIDChannel(cmd)
 	}
@@ -257,7 +255,7 @@ const getNodeCollect = async (cmd: worker_command) => {
 			break
 		}
 	}
-	const balance = profile.tokens.conet.balance
+	const balance = parseFloat(profile.tokens.conet.balance)
 	const sendAmount = balance / SaaSNodes.length
 	for (let i = 0; i < SaaSNodes.length; i ++) {
 		SaaSNodes[i]  = await sendCONET(SaaSNodes[i], sendAmount.toString(), profile)
@@ -466,7 +464,15 @@ const processCmd = async (cmd: worker_command) => {
                 for ( let i = 0; i < profiles.length; i++ ) {
                     const key = profiles[i].keyID
                     if (key) {
-                        profiles[i].tokens.conet.balance = await getCONETBalance (key)
+						const current = profiles[i].tokens
+                        current.conet.balance = await getCONETBalance (key)
+						if (!current?.cntp) {
+							current.cntp = {
+								balance: '0',
+								history: []
+							}
+						}
+						current.cntp.balance = await getCNTPBalance (key)
                         // profiles[i].tokens.usdc.balance = await getUSDCBalance (key)
                     }	
                     
@@ -501,11 +507,16 @@ const processCmd = async (cmd: worker_command) => {
 
 		case 'startProxy': {
 			const profile = gettPrimaryProfile()
+			if (!activeNodes?.length ) {
+				activeNodes = await _getSINodes ('CUSTOMER_REVIEW', 'USA')
+				logger (activeNodes)
+			}
+
 			if (profile && activeNodes && activeNodes.length > 0) {
 				
 				const url = `http://localhost:3001/conet-profile`
                 await postToEndpoint(url, true, { profile, activeNodes })
-                // fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {
+                // fetchProxyData(`http://localhost:3001/getProxyusage`, '', data=> {
                 //     logger (`fetchProxyData GOT DATA FROM locathost `, data)
                 // })
 				return returnUUIDChannel(cmd)
@@ -523,7 +534,21 @@ const processCmd = async (cmd: worker_command) => {
 			
 		}
 
-	
+		case 'startLiveness': {
+			return startLiveness(cmd)
+		}
+
+		case 'stopLiveness': {
+			return stopLiveness(cmd)
+		}
+
+		case 'isLivenessRunning': {
+			cmd.data['false']
+			if (Liveness) {
+				cmd.data['true']
+			}
+			return returnUUIDChannel(cmd)
+		}
 		default: {
 			cmd.err = 'INVALID_COMMAND'
 			responseChannel.postMessage(JSON.stringify(cmd))
@@ -541,17 +566,19 @@ const processCmd = async (cmd: worker_command) => {
 initEncryptWorker()
 
 
-const fetchProxyData = async (url: string, callBack: (data: any) => void) => {
+const fetchProxyData = async (url: string, data: string, callBack: (err, data: any) => void) => {
 
-    const xhttp = new XMLHttpRequest()
+    const xhr = new XMLHttpRequest()
+	
     let last_response_len = 0
 
-	const listeningPogress = () => {
-        const req = xhttp.response
+	xhr.onprogress = (e) => {
+        const req = xhr.response
         clearTimeout(timeCheck)
-        if (xhttp.status !== 200) {
-            logger (`fetchProxyData get status [${xhttp.status}] !== 200 STOP connecting!`)
-            return abort(true)
+        if (xhr.status !== 200) {
+            logger (`fetchProxyData get status [${xhr.status}] !== 200 STOP connecting!`)
+			xhr.abort()
+            return callBack(xhr.status, null)
         }
 		const responseText = req.substr(last_response_len)
         last_response_len = req.length
@@ -565,43 +592,21 @@ const fetchProxyData = async (url: string, callBack: (data: any) => void) => {
                     return logger(`fetchProxyData responseText JSON parse Error typeof [${typeof n}]`, n)
                 }
                 logger (`fetchProxyData Got Stream data typeof data[${typeof obj}][${obj.length}]`, n)
-                return callBack (obj)
+                return callBack (null, obj)
             })
 	}
 
-    const abort = (reconnect: boolean) => {
-        // xhttp.removeEventListener('error', listeningError)
-        // xhttp.removeEventListener('progress', listeningPogress)
-        if (reconnect) {
-            return setTimeout(() => {
-                return fetchProxyData(url, callBack)
-            }, 5000)
-            
-        }
-        logger(`fetchProxyData STOP!`)
-    }
+	const timeCheck = setTimeout(() => {     /* vs. a.timeout */
+		xhr.abort()
+		return callBack('timeout', null)
+    }, 10000)
 
-	const listeningError = (error) => {
-		logger (`fetchProxyData connnection on Error`, error)
-        abort(true)
-	}
-
-	const timeCheck = setTimeout(function () {     /* vs. a.timeout */
-        if (xhttp.readyState < 3) {
-            logger (`fetchProxyData setTimeout readyState [${xhttp.readyState}] restart!`)
-            xhttp.abort()
-            return abort(true)
-        }
-    }, 5000)
+	xhr.open('POST', url, true)
+    xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
+	xhr.setRequestHeader('Cache-Control', 'no-cache')
+    //xhttp.setRequestHeader('Accept', 'text/event-stream')
+    xhr.send(data)
 	
-	xhttp.addEventListener('error', listeningError)
-	xhttp.addEventListener('progress', listeningPogress)
-	
-    xhttp.open('POST', url, true)
-    xhttp.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
-    xhttp.setRequestHeader('Accept', 'text/event-stream')
-    xhttp.send()
-
 
     // const connect = await fetch (url, {
     //     method: "POST",
@@ -683,8 +688,53 @@ const getContainer = async (cmd: worker_command) => {
 		activeNodes = await _getSINodes ('CUSTOMER_REVIEW', 'USA')
 		logger (activeNodes)
 	}
-    //          already init database
-    // fetchProxyData(`http://localhost:3001/connecting`, data => {
+             //already init database
+    // fetchProxyData(`http://localhost:3001/connecting`,'', data => {
     //     processCmd (data)
     // })
+}
+
+const LivenessURL1 = 'https://api.openpgp.online:4001/api/livenessListening'
+
+
+const startLiveness = async (cmd: worker_command) => {
+	const profile = gettPrimaryProfile()
+	if (!profile) {
+		cmd.err = 'NOT_READY'
+		return returnUUIDChannel (cmd)
+	}
+
+	const message =JSON.stringify({ walletAddress: profile.keyID })
+	const messageHash = CoNETModule.EthCrypto.hash.keccak256(message)
+	const signMessage = CoNETModule.EthCrypto.sign( profile.privateKeyArmor, messageHash )
+	const data = {
+		message, signMessage
+	}
+
+	const last = parseFloat(profile.tokens.cntp.balance)
+	Liveness = postToEndpointSSE(LivenessURL1, true, JSON.stringify(data), async (err, _data) => {
+		if (err) {
+			cmd.err = 'FAILURE'
+			cmd.data=[err]
+			return returnUUIDChannel ( cmd )
+		}
+		logger (_data)
+		if (profile.keyID) {
+			const balance = await getCNTPBalance(profile.keyID)
+			const _balance = (parseFloat(balance) - last).toFixed(4)
+			cmd.data = [balance, _balance]
+			return returnUUIDChannel(cmd)
+		}
+		
+	})
+}
+
+const stopLiveness = async (cmd: worker_command) => {
+	
+	if (Liveness && typeof Liveness.abort === 'function') {
+		Liveness.abort()
+
+	}
+	Liveness = null
+	return returnUUIDChannel(cmd)
 }

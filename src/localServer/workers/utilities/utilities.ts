@@ -305,11 +305,11 @@ const unZIP = (compress: string) => {
 const initProfileTokens = () => {
 	return {
 		conet: {
-			balance: 0,
+			balance: '0',
 			history: []
 		},
-		usdc: {
-			balance: 0,
+		cntp: {
+			balance: '0',
 			history: []
 		}
 	}
@@ -367,8 +367,47 @@ const getCONETBalance = async (Addr: string) => {
 	const eth = new CoNETModule.Web3Eth(provider)
 
 	const uuu = await eth.eth.getBalance(Addr)
-	const balance = parseInt(uuu)/denominator
-	return balance
+	const balance = eth.utils.fromWei(uuu,'ether')
+	return weiToEther(balance)
+}
+const minERC20ABI = [
+	// balanceOf
+	{
+	  "constant":true,
+	  "inputs":[{"name":"_owner","type":"address"}],
+	  "name":"balanceOf",
+	  "outputs":[{"name":"balance","type":"uint256"}],
+	  "type":"function"
+	},
+	// decimals
+	{
+	  "constant":true,
+	  "inputs":[],
+	  "name":"decimals",
+	  "outputs":[{"name":"","type":"uint8"}],
+	  "type":"function"
+	}
+]
+const CNTP_Address = '0x0f43685B2cB08b9FB8Ca1D981fF078C22Fec84c5'
+const weiToEther = (wei: string) => {
+	const kkk = parseFloat(wei)
+	if (kkk<0.0000001) {
+		return '0'
+	}
+	return kkk.toFixed(4)
+}
+const getCNTPBalance: (Addr: string) => Promise<string> = (Addr: string) => {
+	const provider = new CoNETModule.Web3Eth(CoNETNet[0])
+	const eth = new CoNETModule.Web3Eth(provider)
+	const contract = new eth.eth.Contract(minERC20ABI, CNTP_Address)
+	
+	return new Promise (resolve => {
+		return contract.methods.balanceOf(Addr).call().then(result => {
+			const ss = weiToEther(eth.utils.fromWei(result,'ether'))
+			return resolve (ss)
+		})
+	})
+	
 }
 
 // const getAllProfileUSDCBalance = () => {
@@ -1041,47 +1080,37 @@ const generateAesKey = async (length = 256) => {
 	
 // }
 
-const postToEndpointSSE = ( url: string, post: boolean, jsonData, CallBack ) => {
+const postToEndpointSSE = ( url: string, post: boolean, jsonData, CallBack:(err: string, data: string[]|null) => void) => {
 
 		const xhr = new XMLHttpRequest()
-		let last_response_len = 0
-
-		xhr.onprogress = () => {
+		xhr.onreadystatechange = async (e) => {
+			return logger (`xhr.onreadystatechange xhr.readyState = ${xhr.readyState} xhr.status [${xhr.status}]`)
+		}
+		let chunk = ''
+		xhr.onprogress = async (e) => {
 			clearTimeout (timeCount)
-			
-
-			if (!last_response_len) {
-				if (xhr.status === 200) {
-					const splitTextArray = xhr.responseText.split(/data: /)[1].split(/\r\n/)[0]
-					last_response_len = xhr.response.length
-					
-					return CallBack (null, splitTextArray)
-				}
-				return CallBack(new Error (`status != 200`))
+			logger (`postToEndpointSSE xhr.onprogress!  ${xhr.readyState} xhr.status [${xhr.status}]`)
+		
+			if (xhr.status !== 200) {
+				return CallBack(xhr.status.toString(), null)
 			}
+			const data = await xhr.responseText
 			
-			const responseText: string = xhr.response.substr(last_response_len)
-			last_response_len = xhr.response.length
-			logger (responseText)
-			const line = responseText.split ('data: ')[1]
-			
-			if (!line ) {
-				return
-			}
-			CallBack (null, line)
+			const responseText = data.split('\r\n\r\n')
+			CallBack ('', responseText)
 		}
 
 		xhr.open( post? 'POST': 'GET', url, true )
 		xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
-		xhr.send(jsonData? JSON.stringify(jsonData): '')
-
-		logger (url)
+		xhr.send(typeof jsonData !=='string' ? JSON.stringify(jsonData): jsonData)
 
 		const timeCount = setTimeout (() => {
 			const Err = `postToEndpoint Timeout!`
 			logger (`postToEndpoint Error`, Err )
-			CallBack (new Error ( Err ))
-		}, XMLHttpRequestTimeout )
+			CallBack ('timeout',null)
+		}, 5000 )
+
+		return xhr
 	
 	
 }
@@ -1146,8 +1175,8 @@ const longConnectToNode = async (_cmd: SICommandObj_Command, currentProfile: pro
 			if (!data) {
 				return resolve (null)
 			}
-			if (/-----BEGIN PGP MESSAGE-----/.test(data)) {
-				const clearText:any = await decrypteMessage (data, privateKeyObj)
+			if (/-----BEGIN PGP MESSAGE-----/.test(data[0])) {
+				const clearText:any = await decrypteMessage (data[0], privateKeyObj)
 				if ( !clearText.data ||!clearText.signatures||!CoNET_Data) {
 					return
 				}
@@ -1875,10 +1904,6 @@ const _fixUrlPro_new = ( match: string, html: string, remotesite: string ) => {
 
 const match = /(https?\:\/\/)?(www\.)?[^\s]+\.[^\s]+/g
 
-const changeLink = (html: string, remotesite: string) => {
-
-}
-
 
 const fixHtmlLinks = (htmlText: string, remotrSite: string) => {
 	const body = htmlText.split('\r\n\r\n')
@@ -2148,8 +2173,16 @@ const encrypt_TestPasscode = async (cmd: worker_command) => {
 		for ( let i = 0; i < profiles.length; i++ ) {
 			const key = profiles[i].keyID
 			if (key) {
-				profiles[i].tokens.conet.balance = await getCONETBalance (key)
-				// profiles[i].tokens.usdc.balance = await getUSDCBalance (key)
+				const profile = profiles[i]
+				const tokens = profiles[i].tokens
+				tokens.conet.balance = await getCONETBalance (key)
+				if (!tokens?.cntp) {
+					tokens.cntp = {
+						balance: '0',
+						history: []
+					}
+				}
+				tokens.cntp.balance = await getCNTPBalance (key)
 			}	
 			
 		}
@@ -2160,9 +2193,9 @@ const encrypt_TestPasscode = async (cmd: worker_command) => {
 	if (activeNodes && activeNodes.length > 0) {
 		const url = `http://localhost:3001/conet-profile`
 		postToEndpoint(url, true, { profile, activeNodes })
-	// 	fetchProxyData(`http://localhost:3001/getProxyusage`, data=> {
-
-    //     })
+		// fetchProxyData(`http://localhost:3001/getProxyusage`,'', data=> {
+		// 	logger (data)
+        // })
 	}
 	
 }

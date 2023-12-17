@@ -46,9 +46,9 @@ const getRandomNode = (activeNodes: nodes_info[], saasNode: nodes_info) => {
 	logger (Colors.grey(`getRandomNode ${ret.ip_addr} saasNode ${saasNode?.ip_addr}`))
 	return ret
 }
-
 const CoNET_SI_Network_Domain = 'openpgp.online'
-const conet_DL_getSINodesPath = `/api/conet-si-list`
+const conet_DL_getSINodes = `https://${ CoNET_SI_Network_Domain }:4001/api/conet-si-list`
+
 const getPac = ( hostIp: string, port: string, http: boolean, sock5: boolean ) => {
 
 	const FindProxyForURL = `function FindProxyForURL ( url, host )
@@ -57,7 +57,9 @@ const getPac = ( hostIp: string, port: string, http: boolean, sock5: boolean ) =
 		isInNet( dnsResolve( host ), "172.16.0.0", "255.240.255.0") ||
 		isInNet( dnsResolve( host ), "127.0.0.0", "255.255.255.0") ||
 		isInNet ( dnsResolve( host ), "192.168.0.0", "255.255.0.0" ) ||
-		isInNet ( dnsResolve( host ), "10.0.0.0", "255.0.0.0" )) {
+		isInNet ( dnsResolve( host ), "10.0.0.0", "255.0.0.0" ) ||
+		dnsDomainIs( host, "conet.network") || dnsDomainIs( host, "openpgp.online")
+		) {
 			return "DIRECT";
 		}
 		return "${ http ? 'PROXY': ( sock5 ? 'SOCKS5' : 'SOCKS' ) } ${ hostIp }:${ port }";
@@ -320,13 +322,14 @@ const postUDPMessage = async (SaaS_node: nodes_info, nodes: nodes_info[], curren
 	req.end(JSON.stringify({data:_sendData}))
 }
 
-const getJSON_DataFromPOST = (domain: string, path: string) => {
+const getJSON_DataFromUrl= (_url: string) => {
+	const url = new URL(_url)
 	const option: RequestOptions = {
-		host: domain,
+		hostname: url.hostname,
 		method: 'POST',
-		port: 443,
-		path: path,
-		protocol: 'https:',
+		port: url.port,
+		path: url.pathname,
+		protocol: url.protocol,
 		headers: {
 			'Content-Type': 'application/json;charset=UTF-8',
 			'Connection': 'close',
@@ -359,7 +362,7 @@ const getJSON_DataFromPOST = (domain: string, path: string) => {
 		})
 
 		req.on('error', err => {
-			logger (Colors.red(`getJSON_DataFromPOST server on Error `), err)
+			logger (Colors.red(`getJSON_DataFromPOST server on Error _url=[${_url}] `), inspect(option, false, 2, true), err)
 		})
 		req.end()
 	})
@@ -388,7 +391,7 @@ export class proxyServer {
 
 	private startLocalProxy = async () => {
 
-		this.nodes = await getJSON_DataFromPOST(CoNET_SI_Network_Domain, conet_DL_getSINodesPath)
+		this.nodes = await getJSON_DataFromUrl(conet_DL_getSINodes)
 		if (!this._nodes|| !this._nodes.length) {
 			logger (Colors.red(`startLocalProxy Error! Have no SI nodes Infomation!`))
 		}

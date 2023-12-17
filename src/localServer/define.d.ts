@@ -126,7 +126,7 @@ interface TokenPreferences {
 }
 
 interface CryptoAsset {
-	balance: number
+	balance: string
 	history: CryptoAssetHistory[]
 }
 
@@ -162,7 +162,7 @@ declare type WorkerCommand = 'READY'|'getRegiestNodes'|
 	'getFaucet'|'isAddress'|'syncAsset'|'sendAsset'|'getUSDCPrice'|'buyUSDC'|'getWorkerClientID'|
 	'mintCoNETCash'|'getSINodes'|'getRecipientCoNETCashAddress'|'getUserProfile'|
 	'sendMessage'|'incomeData'|'WORKER_MESSAGE'|'getCONETBalance'|'startProxy'|
-    'SaaSRegister'|'getContainer'|'ipaddress'
+    'SaaSRegister'|'getContainer'|'ipaddress'|'startLiveness'|'stopLiveness'|'isLivenessRunning'
 	//		from service worker
 	'urlProxy'|'saveDomain'|'getDomain'|'getWorkerClientID'
 
@@ -218,6 +218,7 @@ interface profile extends keyPair {
 	emailAddr?: string
 	tokens: {
 		conet:CryptoAsset
+		cntp:CryptoAsset
 	}
 	network: {
 		recipients: nodes_info[]
